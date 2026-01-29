@@ -14,10 +14,14 @@ import { getAvatarWithInitials, getAvatarSource } from '../utils/avatar';
 import Toast from 'react-native-toast-message';
 import { Audio, Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
+import MessageBubble from '../components/MessageBubble';
+
+import { useCall } from '../context/CallContext'; // Import useCall
 
 const { width } = Dimensions.get('window');
 
 export default function ChatScreen({ route, navigation }) {
+    const { startCall } = useCall(); // Get startCall from context
     const { conversation, otherUser } = route.params;
     const dispatch = useDispatch();
     const user = useSelector(state => state.auth.user);
@@ -52,6 +56,19 @@ export default function ChatScreen({ route, navigation }) {
     const durationInterval = useRef(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
+    // Audio Playback State
+    const [playingAudioId, setPlayingAudioId] = useState(null);
+    const soundObjectRef = useRef(null);
+
+    // Cleanup Audio on Unmount
+    useEffect(() => {
+        return () => {
+            if (soundObjectRef.current) {
+                soundObjectRef.current.unloadAsync();
+            }
+        };
+    }, []);
+
     useEffect(() => {
         // Initial Fetch for fresh status
         api.get(`/social/users/${otherUser._id}`).then(res => {
@@ -66,7 +83,7 @@ export default function ChatScreen({ route, navigation }) {
         // Mark as Read
         api.patch(`/chat/conversations/${conversation._id}/read`).catch(err => console.log('Mark read err:', err));
 
-        const handleStatusUpdate = (data) => {
+        const handleUserStatusUpdate = (data) => {
             if (data.userId === otherUser._id) {
                 setOtherUserStatus({
                     isOnline: data.isOnline,
@@ -75,9 +92,9 @@ export default function ChatScreen({ route, navigation }) {
             }
         };
 
-        socketService.on('user_status_update', handleStatusUpdate);
+        socketService.on('user_status_update', handleUserStatusUpdate);
         return () => {
-            socketService.off('user_status_update', handleStatusUpdate);
+            socketService.off('user_status_update', handleUserStatusUpdate);
         };
     }, []);
 
@@ -139,6 +156,7 @@ export default function ChatScreen({ route, navigation }) {
             Toast.show({ type: 'error', text1: 'User is blocked', text2: 'Unblock to call' });
             return;
         }
+        startCall({ _id: otherUser._id || otherUser.id, name: otherUser.name, avatar: otherUser.profilePicture }, 'voice');
         navigation.navigate('Call', {
             callType: 'voice',
             otherUser: { _id: otherUser._id || otherUser.id, name: otherUser.name, avatar: otherUser.profilePicture },
@@ -151,6 +169,7 @@ export default function ChatScreen({ route, navigation }) {
             Toast.show({ type: 'error', text1: 'User is blocked', text2: 'Unblock to call' });
             return;
         }
+        startCall({ _id: otherUser._id || otherUser.id, name: otherUser.name, avatar: otherUser.profilePicture }, 'video');
         navigation.navigate('Call', {
             callType: 'video',
             otherUser: { _id: otherUser._id || otherUser.id, name: otherUser.name, avatar: otherUser.profilePicture },
@@ -192,22 +211,13 @@ export default function ChatScreen({ route, navigation }) {
         }
     };
 
-    const [playingAudioId, setPlayingAudioId] = useState(null);
-    const soundObjectRef = useRef(null);
-
-    useEffect(() => {
-        return () => {
-            if (soundObjectRef.current) {
-                soundObjectRef.current.unloadAsync();
-            }
-        };
-    }, []);
-
+    // Main Socket Logic
     useEffect(() => {
         dispatch(setActiveConversation(conversation._id));
         fetchMessages();
 
         socketService.on('message_received', handleMessageReceived);
+        socketService.on('message_status_update', handleMessageStatusUpdate); // WhatsApp Ticks
         socketService.on('user_typing', handleUserTyping);
         socketService.on('user_stop_typing', handleUserStopTyping);
         socketService.on('message_edited', handleMessageEdited);
@@ -217,6 +227,7 @@ export default function ChatScreen({ route, navigation }) {
         return () => {
             dispatch(setActiveConversation(null));
             socketService.off('message_received', handleMessageReceived);
+            socketService.off('message_status_update', handleMessageStatusUpdate);
             socketService.off('user_typing', handleUserTyping);
             socketService.off('user_stop_typing', handleUserStopTyping);
             socketService.off('message_edited', handleMessageEdited);
@@ -224,6 +235,12 @@ export default function ChatScreen({ route, navigation }) {
             socketService.off('reaction_added', handleReactionAdded);
         };
     }, [conversation._id]);
+
+    const handleMessageStatusUpdate = (data) => {
+        setMessages(prev => prev.map(m =>
+            m._id === data.messageId ? { ...m, status: data.status } : m
+        ));
+    };
 
     const handleMessageEdited = (data) => {
         setMessages(prev => prev.map(m => m._id === data.messageId ? { ...m, content: data.content, isEdited: true } : m));
@@ -291,6 +308,7 @@ export default function ChatScreen({ route, navigation }) {
             type: 'text',
             createdAt: new Date(),
             pending: true,
+            status: 'sent', // Initial status
             replyTo: replyTo
         };
 
@@ -312,6 +330,7 @@ export default function ChatScreen({ route, navigation }) {
                     replyTo: replyTo?._id,
                 });
                 const realMessage = res.data.message;
+                // Replace temp message with real one
                 setMessages(prev => prev.map(m => m._id === tempId ? realMessage : m));
             }
         } catch (error) {
@@ -419,7 +438,6 @@ export default function ChatScreen({ route, navigation }) {
     };
 
     const handleSendImage = async (imageUri) => {
-        // ... simplified for brevity, assume works ...
         try {
             setUploading(true);
             const uploadedImage = await uploadImage(imageUri);
@@ -434,9 +452,6 @@ export default function ChatScreen({ route, navigation }) {
             setUploading(false);
         }
     };
-
-    // ... Other media handlers (Video, Document, Voice) are similar, restoring them from memory/logic ...
-    // Since I'm rewriting, I'll ensure they are present.
 
     const handleSendVideo = async (videoUri) => {
         try {
@@ -509,11 +524,8 @@ export default function ChatScreen({ route, navigation }) {
     const formatTime = (date) => new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     const formatDuration = (seconds) => { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs.toString().padStart(2, '0')}`; };
 
+    // New Render Message using MessageBubble
     const renderMessage = ({ item }) => {
-        // Safe ID Comparison
-        const msgSenderId = item.sender._id || item.sender.id || item.sender;
-        const currentUserId = user.id || user._id;
-        const isMyMessage = String(msgSenderId) === String(currentUserId);
         const getMediaUrl = (url) => {
             if (!url) return null;
             if (url.includes(':1000')) return url.replace(':1000', ':2000');
@@ -525,12 +537,11 @@ export default function ChatScreen({ route, navigation }) {
             try {
                 const mediaUrl = getMediaUrl(url);
                 if (playingAudioId === messageId) {
-                    // Toggle pause/play
                     if (soundObjectRef.current) {
                         const status = await soundObjectRef.current.getStatusAsync();
                         if (status.isPlaying) {
                             await soundObjectRef.current.pauseAsync();
-                            setPlayingAudioId(null); // Or keep ID but indicate paused? For simplicity, null = paused icon
+                            setPlayingAudioId(null);
                         } else {
                             await soundObjectRef.current.playAsync();
                             setPlayingAudioId(messageId);
@@ -538,22 +549,15 @@ export default function ChatScreen({ route, navigation }) {
                     }
                     return;
                 }
-
-                // Stop existing
                 if (soundObjectRef.current) {
                     await soundObjectRef.current.unloadAsync();
                     soundObjectRef.current = null;
                 }
-
                 await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
                 const { sound } = await Audio.Sound.createAsync(
                     { uri: mediaUrl },
                     { shouldPlay: true },
-                    (status) => {
-                        if (status.didJustFinish) {
-                            setPlayingAudioId(null);
-                        }
-                    }
+                    (status) => { if (status.didJustFinish) setPlayingAudioId(null); }
                 );
                 soundObjectRef.current = sound;
                 setPlayingAudioId(messageId);
@@ -561,25 +565,17 @@ export default function ChatScreen({ route, navigation }) {
         };
 
         return (
-            <View style={[styles.messageContainer, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-                {!isMyMessage && <Image source={getAvatarSource(otherUser)} style={styles.messageAvatar} />}
-                <TouchableOpacity activeOpacity={0.9} onLongPress={() => handleActionModal(item)} style={[styles.messageBubble, isMyMessage ? styles.myMessageBubble : styles.otherMessageBubble]}>
-                    {item.type === 'image' && <TouchableOpacity onPress={() => setSelectedImage(getMediaUrl(item.mediaUrl))}><Image source={{ uri: getMediaUrl(item.mediaUrl) }} style={styles.messageImage} /></TouchableOpacity>}
-                    {item.type === 'video' && <Video style={styles.videoPlayer} source={{ uri: getMediaUrl(item.mediaUrl) }} resizeMode={ResizeMode.COVER} useNativeControls />}
-                    {item.type === 'audio' && (
-                        <View style={styles.audioContainer}>
-                            <TouchableOpacity onPress={() => playVoiceNote(item.mediaUrl, item._id)} style={{ marginRight: 10 }}>
-                                <Text style={{ fontSize: 24 }}>{playingAudioId === item._id ? '⏸️' : '▶️'}</Text>
-                            </TouchableOpacity>
-                            <Text style={isMyMessage ? styles.myMessageText : styles.otherMessageText}>{formatDuration(item.mediaDuration)}</Text>
-                            {/* Visual waveform placeholder line */}
-                            <View style={{ height: 2, flex: 1, backgroundColor: isMyMessage ? 'rgba(255,255,255,0.5)' : '#ddd', marginLeft: 10, marginRight: 5 }} />
-                        </View>
-                    )}
-                    {item.type === 'text' && <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>{item.content}</Text>}
-                    <Text style={[styles.messageTime, isMyMessage ? styles.myMessageTime : styles.otherMessageTime]}>{formatTime(item.createdAt)}</Text>
-                </TouchableOpacity>
-            </View>
+            <MessageBubble
+                item={item}
+                userId={user.id || user._id}
+                onLongPress={handleActionModal}
+                onImagePress={(uri) => setSelectedImage(uri)}
+                onPlayAudio={playVoiceNote}
+                playingAudioId={playingAudioId}
+                getMediaUrl={getMediaUrl}
+                formatDuration={formatDuration}
+                formatTime={formatTime}
+            />
         );
     };
 
@@ -709,69 +705,70 @@ export default function ChatScreen({ route, navigation }) {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f2f2f2' },
     headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
-    headerAvatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10, borderWidth: 1, borderColor: '#eee' },
-    headerName: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-    onlineText: { fontSize: 11, color: '#00C853', fontWeight: '600' },
-    offlineText: { fontSize: 11, color: '#999' },
-    typingText: { fontSize: 11, color: theme.colors.primary, fontWeight: '500' },
-    headerRight: { flexDirection: 'row', marginRight: 5 },
-    headerButton: { marginLeft: 15, padding: 5 },
-    messagesList: { paddingHorizontal: 15, paddingVertical: 20 },
-    messageContainer: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-end' },
-    myMessage: { justifyContent: 'flex-end' },
-    otherMessage: { justifyContent: 'flex-start' },
-    messageAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 8, marginBottom: 2 },
-    messageBubble: { maxWidth: '78%', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 18, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 1 },
-    myMessageBubble: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
-    otherMessageBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 4 },
-    messageText: { fontSize: 15, lineHeight: 22 },
-    myMessageText: { color: '#fff' },
-    otherMessageText: { color: '#1a1a1a' },
-    messageTime: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
-    myMessageTime: { color: 'rgba(255,255,255,0.7)' },
-    otherMessageTime: { color: '#999' },
-    messageImage: { width: 220, height: 160, borderRadius: 12, marginBottom: 2 },
-    videoPlayer: { width: 220, height: 160, borderRadius: 12 },
-    audioContainer: { flexDirection: 'row', alignItems: 'center', padding: 5, minWidth: 120, justifyContent: 'flex-start' },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10, position: 'absolute', bottom: Platform.OS === 'ios' ? 25 : 15, left: 15, right: 15, backgroundColor: '#fff', borderRadius: 30, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10, zIndex: 100 },
-    input: { flex: 1, maxHeight: 100, fontSize: 15, color: '#333', paddingVertical: 8 },
-    sendButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
-    micButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f2f2f2', justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
-    replyPreviewOuter: { backgroundColor: '#f9f9f9', borderLeftWidth: 3, borderLeftColor: theme.colors.primary, padding: 8, marginBottom: 10, borderRadius: 4 },
-    replySender: { color: theme.colors.primary, fontSize: 11, fontWeight: 'bold' },
-    closeReply: { position: 'absolute', right: 5, top: 5, fontSize: 16, color: '#999', padding: 5 },
-    editIndicator: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, backgroundColor: '#fff', marginBottom: 5 },
-
-    // Action Modals
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-    actionMenu: { width: '80%', backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center' },
-    actionItems: { width: '100%' },
-    actionOption: { paddingVertical: 12, width: '100%', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-    actionOptionText: { fontSize: 16, color: '#007AFF', fontWeight: '500' },
-
-    forwardContainer: { flex: 1, backgroundColor: '#f2f2f2' },
-    forwardHeader: { padding: 20, backgroundColor: '#fff', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
-    forwardTitle: { fontSize: 18, fontWeight: 'bold' },
-    forwardClose: { fontSize: 16, color: theme.colors.primary },
-    contactItem: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-    contactAvatar: { width: 44, height: 44, borderRadius: 22, marginRight: 15 },
-    contactName: { fontSize: 16, fontWeight: '600', color: '#333', flex: 1 },
-    forwardBtn: { backgroundColor: theme.colors.primary, paddingHorizontal: 15, paddingVertical: 6, borderRadius: 15 },
-    forwardBtnText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-
-    attachmentSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-    sheetTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 24, color: '#333' },
-    sheetGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    sheetItem: { width: '30%', alignItems: 'center', marginBottom: 24 },
-    cancelSheetBtn: { alignItems: 'center', padding: 15, marginTop: 10 },
-    cancelSheetText: { color: '#ff3b30', fontSize: 16, fontWeight: '600' },
-    recordingContainer: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#fff', borderRadius: 30, position: 'absolute', bottom: Platform.OS === 'ios' ? 25 : 15, left: 15, right: 15, elevation: 10 },
-    cancelText: { fontSize: 20, color: '#ff3b30' },
-    recordingTime: { fontSize: 16, color: '#ff3b30', fontWeight: 'bold', flex: 1 },
-    sendVoiceButton: { backgroundColor: theme.colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+    headerAvatar: { width: 35, height: 35, borderRadius: 17.5, marginRight: 10 },
+    headerName: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+    onlineText: { fontSize: 12, color: '#4caf50' },
+    offlineText: { fontSize: 12, color: '#666' },
+    typingText: { fontSize: 12, color: '#007bff', fontStyle: 'italic' },
+    headerRight: { flexDirection: 'row', gap: 15 },
+    headerButton: { padding: 5 },
+    messagesList: { padding: 15, paddingBottom: 20 },
+    replyPreviewOuter: {
+        backgroundColor: '#f9f9f9', padding: 10, borderLeftWidth: 4, borderLeftColor: theme.colors.primary,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 10, marginTop: 10
+    },
+    replySender: { fontWeight: 'bold', color: theme.colors.primary, marginBottom: 2 },
+    closeReply: { padding: 5 },
+    editIndicator: {
+        backgroundColor: '#fff3cd', padding: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 10, marginTop: 10
+    },
+    inputContainer: {
+        flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee'
+    },
+    attachButton: { padding: 10 },
+    input: {
+        flex: 1, backgroundColor: '#f9f9f9', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8,
+        marginHorizontal: 10, maxHeight: 100, fontSize: 16
+    },
+    sendButton: { backgroundColor: theme.colors.primary, padding: 10, borderRadius: 20 },
+    micButton: { backgroundColor: '#eee', padding: 10, borderRadius: 20 },
+    recordingContainer: {
+        flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', justifyContent: 'space-between'
+    },
+    cancelText: { fontSize: 16, color: 'red', padding: 10 },
+    recordingTime: { fontSize: 18, fontWeight: 'bold', color: theme.colors.primary },
+    sendVoiceButton: { backgroundColor: theme.colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
     sendVoiceText: { color: '#fff', fontWeight: 'bold' },
 
-    blockedContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#fff', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#eee' },
-    blockedText: { color: '#666', marginBottom: 10 },
-    unblockText: { color: theme.colors.primary, fontWeight: 'bold' }
+    // Modal & Sheet Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    actionMenu: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+    actionItems: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+    actionOption: { paddingVertical: 15, alignItems: 'center' },
+    actionOptionText: { fontSize: 16, fontWeight: '500' },
+    blockedContainer: {
+        position: 'absolute', bottom: 70, left: 20, right: 20, backgroundColor: '#333',
+        padding: 15, borderRadius: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
+    },
+    blockedText: { color: '#fff' },
+    unblockText: { color: '#4caf50', fontWeight: 'bold' },
+
+    // Forward Modal
+    forwardContainer: { flex: 1, backgroundColor: '#fff', paddingTop: 50 },
+    forwardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
+    forwardTitle: { fontSize: 18, fontWeight: 'bold' },
+    forwardClose: { fontSize: 16, color: 'blue' },
+    contactItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#f9f9f9' },
+    contactAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 15 },
+    contactName: { fontSize: 16, flex: 1 },
+    forwardBtn: { backgroundColor: '#eee', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15 },
+    forwardBtnText: { color: '#333', fontSize: 12 },
+
+    // Attachment Sheet
+    attachmentSheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+    sheetTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+    sheetGrid: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+    sheetItem: { alignItems: 'center', padding: 10 },
+    cancelSheetBtn: { padding: 15, alignItems: 'center', backgroundColor: '#f2f2f2', borderRadius: 10 },
+    cancelSheetText: { fontSize: 16, fontWeight: '600' }
 });

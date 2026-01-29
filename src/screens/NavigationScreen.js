@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions, Platform, ActivityIndicator, FlatList, Keyboard } from 'react-native';
 import { theme } from '../constants/theme';
 import MapboxGL from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,8 +7,9 @@ import * as Location from 'expo-location';
 import Toast from 'react-native-toast-message';
 
 // Make sure token is set
+const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiZXRvcGlhMTIzNCIsImEiOiJjbWtzMDZtenUxN3NlM2VzOTJobnp5dm1jIn0.nJ-d1lTNg9LBgfxp9BOR5A';
 if (Platform.OS !== 'web') {
-    MapboxGL.setAccessToken('pk.eyJ1IjoiZXRvcGlhMTIzNCIsImEiOiJjbWtzMDZtenUxN3NlM2VzOTJobnp5dm1jIn0.nJ-d1lTNg9LBgfxp9BOR5A');
+    MapboxGL.setAccessToken(MAPBOX_ACCESS_TOKEN);
 }
 
 const { width, height } = Dimensions.get('window');
@@ -26,9 +27,12 @@ export default function NavigationScreen({ navigation }) {
     }
 
     const [destination, setDestination] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
     const [routeInfo, setRouteInfo] = useState(null); // { distance, duration }
     const [coordinates, setCoordinates] = useState(null); // { start: [], end: [] }
+    const [routeGeoJSON, setRouteGeoJSON] = useState(null); // Actual route path
     const [userLocation, setUserLocation] = useState(null);
+    const [loading, setLoading] = useState(false);
     const cameraRef = useRef(null);
 
     useEffect(() => {
@@ -40,32 +44,85 @@ export default function NavigationScreen({ navigation }) {
         })();
     }, []);
 
-    // Placeholder for Geocoding (In real app, fetch from Mapbox Geocoding API)
-    const handleSearch = async () => {
-        if (!destination) return;
-        Toast.show({ type: 'info', text1: 'Searching...', text2: `Routing to ${destination}` });
+    // Search Address Suggestions (Mapbox Geocoding)
+    const searchAddress = async (text) => {
+        setDestination(text);
+        if (text.length < 3) {
+            setSuggestions([]);
+            return;
+        }
 
-        // Simulating a geocode result for demo (e.g., somewhere nearby in Lagos)
-        // In reality: Fetch 'https://api.mapbox.com/geocoding/v5/mapbox.places/...'
-        const simulatedDest = [3.3792 + (Math.random() * 0.05), 6.5244 + (Math.random() * 0.05)];
-
-        setCoordinates({
-            start: userLocation || [3.3792, 6.5244],
-            end: simulatedDest
-        });
-
-        setRouteInfo({
-            duration: Math.floor(10 + Math.random() * 30) + ' min',
-            distance: (2 + Math.random() * 10).toFixed(1) + ' km'
-        });
-
-        if (cameraRef.current) {
-            cameraRef.current.fitBounds(
-                userLocation || [3.3792, 6.5244],
-                simulatedDest,
-                [50, 50, 50, 50],
-                1000
+        try {
+            const proximity = userLocation ? `&proximity=${userLocation[0]},${userLocation[1]}` : '';
+            const response = await fetch(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&country=NG&limit=5${proximity}`
             );
+            const data = await response.json();
+            setSuggestions(data.features || []);
+        } catch (error) {
+            console.error('Geocoding error:', error);
+        }
+    };
+
+    // Select Destination & Fetch Route
+    const handleSelectDestination = async (feature) => {
+        Keyboard.dismiss();
+        setSuggestions([]);
+        setDestination(feature.place_name);
+        setLoading(true);
+
+        const destCoords = feature.center; // [lng, lat]
+        const startCoords = userLocation;
+
+        if (!startCoords) {
+            Toast.show({ type: 'error', text1: 'Location Error', text2: 'User location not found' });
+            setLoading(false);
+            return;
+        }
+
+        try {
+            // Fetch Route from Mapbox Directions API
+            const response = await fetch(
+                `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${destCoords[0]},${destCoords[1]}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`
+            );
+            const data = await response.json();
+
+            if (!data.routes || data.routes.length === 0) {
+                Toast.show({ type: 'error', text1: 'Route Error', text2: 'No route found' });
+                setLoading(false);
+                return;
+            }
+
+            const route = data.routes[0];
+
+            // Set Route Data
+            setCoordinates({ start: startCoords, end: destCoords });
+            setRouteGeoJSON({
+                type: 'Feature',
+                properties: {},
+                geometry: route.geometry
+            });
+
+            setRouteInfo({
+                duration: Math.round(route.duration / 60) + ' min',
+                distance: (route.distance / 1000).toFixed(1) + ' km'
+            });
+
+            // Fit Camera to Route
+            if (cameraRef.current) {
+                cameraRef.current.fitBounds(
+                    [Math.min(startCoords[0], destCoords[0]), Math.min(startCoords[1], destCoords[1])],
+                    [Math.max(startCoords[0], destCoords[0]), Math.max(startCoords[1], destCoords[1])],
+                    [100, 50, 100, 50], // padding: top, right, bottom, left
+                    1000 // animation duration
+                );
+            }
+
+        } catch (error) {
+            console.error('Routing error:', error);
+            Toast.show({ type: 'error', text1: 'Network Error', text2: 'Failed to fetch route' });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -77,59 +134,80 @@ export default function NavigationScreen({ navigation }) {
                     ref={cameraRef}
                     zoomLevel={14}
                     centerCoordinate={userLocation || [3.3792, 6.5244]}
+                    animationMode={'flyTo'}
+                    animationDuration={2000}
                 />
                 <MapboxGL.UserLocation visible={true} showsUserHeadingIndicator={true} />
 
+                {/* Destination Marker */}
                 {coordinates && (
-                    <>
-                        <MapboxGL.PointAnnotation id="dest" coordinate={coordinates.end}>
-                            <View style={styles.markerContainer}>
-                                <View style={styles.markerDot} />
-                            </View>
-                        </MapboxGL.PointAnnotation>
+                    <MapboxGL.PointAnnotation id="dest" coordinate={coordinates.end}>
+                        <View style={styles.markerContainer}>
+                            <View style={styles.markerDot} />
+                        </View>
+                    </MapboxGL.PointAnnotation>
+                )}
 
-                        {/* Route Line (Simulated Straight Line for now without Directions API Key configured extensively) */}
-                        {/* In real implementation, use Mapbox Directions API for ShapeSource sourceLayer */}
-                        <MapboxGL.ShapeSource id="routeSource" shape={{
-                            type: 'Feature',
-                            properties: {},
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: [coordinates.start, coordinates.end]
-                            }
-                        }}>
-                            <MapboxGL.LineLayer id="routeFill" style={{ lineColor: theme.colors.primary, lineWidth: 4 }} />
-                        </MapboxGL.ShapeSource>
-                    </>
+                {/* Real Route Line (Polyline) */}
+                {routeGeoJSON && (
+                    <MapboxGL.ShapeSource id="routeSource" shape={routeGeoJSON}>
+                        <MapboxGL.LineLayer
+                            id="routeFill"
+                            style={{
+                                lineColor: theme.colors.primary,
+                                lineWidth: 5,
+                                lineCap: 'round',
+                                lineJoin: 'round'
+                            }}
+                        />
+                    </MapboxGL.ShapeSource>
                 )}
             </MapboxGL.MapView>
 
-            {/* UI Overlay */}
+            {/* Top Bar with Search */}
             <View style={styles.topBar}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Search destination..."
-                    placeholderTextColor="#666"
-                    value={destination}
-                    onChangeText={setDestination}
-                    onSubmitEditing={handleSearch}
-                />
-                <TouchableOpacity onPress={handleSearch} style={styles.searchBtn}>
-                    <Ionicons name="search" size={20} color="#fff" />
-                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Search destination..."
+                        placeholderTextColor="#666"
+                        value={destination}
+                        onChangeText={searchAddress}
+                    />
+                </View>
+                {loading && <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 10 }} />}
             </View>
 
+            {/* Address Suggestions Dropdown */}
+            {suggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                    <FlatList
+                        data={suggestions}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity onPress={() => handleSelectDestination(item)} style={styles.suggestionItem}>
+                                <Ionicons name="location-outline" size={20} color="#666" style={{ marginRight: 10 }} />
+                                <Text style={styles.suggestionText} numberOfLines={1}>{item.place_name}</Text>
+                            </TouchableOpacity>
+                        )}
+                    />
+                </View>
+            )}
+
             {/* Route Info Card */}
-            {routeInfo && (
+            {routeInfo && !loading && (
                 <View style={styles.infoCard}>
                     <View>
                         <Text style={styles.timeText}>{routeInfo.duration}</Text>
-                        <Text style={styles.distText}>{routeInfo.distance}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="resize" size={14} color="#666" style={{ marginRight: 4 }} />
+                            <Text style={styles.distText}>{routeInfo.distance}</Text>
+                        </View>
                     </View>
-                    <TouchableOpacity style={styles.goBtn}>
+                    <TouchableOpacity style={styles.goBtn} onPress={() => Toast.show({ type: 'success', text1: 'Starting Navigation', text2: 'Drive safely!' })}>
                         <Text style={styles.goText}>GO</Text>
                         <Ionicons name="navigate" size={20} color="#fff" style={{ marginLeft: 5 }} />
                     </TouchableOpacity>
@@ -162,7 +240,6 @@ const styles = StyleSheet.create({
         elevation: 5
     },
     input: {
-        flex: 1,
         height: 45,
         backgroundColor: '#fff',
         borderRadius: 25,
@@ -175,15 +252,32 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 4
     },
-    searchBtn: {
-        width: 45,
-        height: 45,
-        borderRadius: 25,
-        backgroundColor: theme.colors.primary,
-        marginLeft: 10,
-        justifyContent: 'center',
+    suggestionsContainer: {
+        position: 'absolute',
+        top: 100,
+        left: 20,
+        right: 20,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        maxHeight: 200,
+        zIndex: 20,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4
+    },
+    suggestionItem: {
+        flexDirection: 'row',
         alignItems: 'center',
-        elevation: 5
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee'
+    },
+    suggestionText: {
+        flex: 1,
+        fontSize: 14,
+        color: '#333'
     },
     infoCard: {
         position: 'absolute',
@@ -196,10 +290,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        elevation: 10
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8
     },
     timeText: { fontSize: 24, fontWeight: 'bold', color: theme.colors.primary },
-    distText: { fontSize: 14, color: '#666', marginTop: 2 },
+    distText: { fontSize: 14, color: '#666' },
     goBtn: {
         backgroundColor: theme.colors.primary,
         paddingVertical: 12,
@@ -210,17 +308,19 @@ const styles = StyleSheet.create({
     },
     goText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
     markerContainer: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: 'rgba(0, 255, 0, 0.3)',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
         justifyContent: 'center',
         alignItems: 'center'
     },
     markerDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: theme.colors.primary
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: theme.colors.primary,
+        borderWidth: 2,
+        borderColor: '#fff'
     }
 });

@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 // Production Socket URL - Render backend
 const SOCKET_URL = 'https://uberappbackend.onrender.com';
-// const SOCKET_URL = 'http://localhost:2000';
+// const SOCKET_URL = 'http://172.20.216.100:2000';
 
 class SocketService {
     socket = null;

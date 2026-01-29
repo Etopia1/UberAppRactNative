@@ -36,21 +36,21 @@ export default function HomeScreen({ navigation }) {
             onPanResponderMove: (_, gestureState) => {
                 // Allow dragging up (negative) and down (positive)
                 // We clamp it slightly so it doesn't fly off screen
-                if (gestureState.dy > 320) return; // Max drag down
+                if (gestureState.dy > 180) return; // Limit drag so icons stay visible
                 panY.setValue(gestureState.dy);
             },
             onPanResponderRelease: (_, gestureState) => {
                 if (gestureState.dy < -50) {
                     // Dragged UP -> Expand
                     Animated.spring(panY, {
-                        toValue: -250, // Move up
+                        toValue: -200, // Move up
                         useNativeDriver: false,
                         bounciness: 8
                     }).start();
                 } else if (gestureState.dy > 80) {
-                    // Dragged DOWN -> Minimize (Show map clearly)
+                    // Dragged DOWN -> Minimize (But keep content visible)
                     Animated.spring(panY, {
-                        toValue: 320, // Move down significantly
+                        toValue: 150, // Peeking mode
                         useNativeDriver: false,
                         bounciness: 8
                     }).start();
@@ -155,6 +155,16 @@ export default function HomeScreen({ navigation }) {
 
                 <Text style={styles.sheetTitle}>Good Morning, {user?.name?.split(' ')[0]}</Text>
 
+                {/* Gemini AI Input Button */}
+                <TouchableOpacity
+                    style={styles.geminiButton}
+                    onPress={() => navigation.navigate('Gemini')}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="sparkles" size={20} color={theme.colors.primary} style={{ marginRight: 10 }} />
+                    <Text style={styles.geminiText}>Ask Gemini...</Text>
+                </TouchableOpacity>
+
                 <View style={styles.cardRow}>
                     {/* Ride Card */}
                     <TouchableOpacity
@@ -187,61 +197,22 @@ export default function HomeScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Second Row: Navigation & Gemini */}
-                <View style={[styles.cardRow, { marginTop: -10 }]}>
-                    {/* Navigation Card */}
-                    <TouchableOpacity
-                        style={[styles.card, styles.navCard]}
-                        onPress={() => navigation.navigate('Navigation')}
-                        activeOpacity={0.9}
-                    >
-                        <View>
-                            <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/map-marker.png' }} style={styles.cardIcon} />
-                            <Text style={styles.cardTitle}>Routes</Text>
-                        </View>
-                        <View style={styles.arrowContainer}>
-                            <Ionicons name="compass" size={20} color={theme.colors.text} />
-                        </View>
-                    </TouchableOpacity>
+                {/* Navigation Card (Full Width) */}
+                <TouchableOpacity
+                    style={[styles.card, styles.navCard, { width: '100%', marginBottom: 25 }]}
+                    onPress={() => navigation.navigate('Navigation')}
+                    activeOpacity={0.9}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/map-marker.png' }} style={[styles.cardIcon, { marginBottom: 0, marginRight: 15 }]} />
+                        <Text style={styles.cardTitle}>View Routes & Traffic</Text>
+                    </View>
+                    <View style={styles.arrowContainer}>
+                        <Ionicons name="compass" size={20} color={theme.colors.text} />
+                    </View>
+                </TouchableOpacity>
 
-                    {/* Gemini AI Card */}
-                    <TouchableOpacity
-                        style={[styles.card, styles.aiCard]}
-                        onPress={() => navigation.navigate('Gemini')}
-                        activeOpacity={0.9}
-                    >
-                        <View>
-                            <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/chatbot.png' }} style={styles.cardIcon} />
-                            <Text style={styles.cardTitle}>Ask Gemini</Text>
-                        </View>
-                        <View style={styles.arrowContainer}>
-                            <Ionicons name="sparkles" size={20} color={theme.colors.text} />
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Recent Locations */}
-                <View style={styles.recentSection}>
-                    <Text style={styles.sectionHeader}>Recent</Text>
-                    <TouchableOpacity style={styles.recentItem}>
-                        <View style={styles.recentIcon}>
-                            <Ionicons name="time" size={20} color={theme.colors.textSecondary} />
-                        </View>
-                        <View>
-                            <Text style={styles.recentTitle}>Office</Text>
-                            <Text style={styles.recentSub}>123 Business Park</Text>
-                        </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.recentItem}>
-                        <View style={styles.recentIcon}>
-                            <Ionicons name="home" size={20} color={theme.colors.textSecondary} />
-                        </View>
-                        <View>
-                            <Text style={styles.recentTitle}>Home</Text>
-                            <Text style={styles.recentSub}>555 Main Street</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                {/* Recent Locations Removed */}
             </Animated.View>
 
             <MenuModal />
@@ -319,7 +290,20 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         color: theme.colors.text,
+        marginBottom: 15
+    },
+    geminiButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3E5F5',
+        padding: 15,
+        borderRadius: 15,
         marginBottom: 20
+    },
+    geminiText: {
+        fontSize: 16,
+        color: theme.colors.primary,
+        fontWeight: '600'
     },
     cardRow: {
         flexDirection: 'row',
@@ -328,7 +312,7 @@ const styles = StyleSheet.create({
     },
     card: {
         width: (width - 65) / 2,
-        height: 140,
+        height: 120, // Reduced from 140
         borderRadius: 20,
         padding: 15,
         justifyContent: 'space-between',
@@ -351,12 +335,12 @@ const styles = StyleSheet.create({
         backgroundColor: '#F3E5F5',
     },
     cardIcon: {
-        width: 40,
-        height: 40,
+        width: 32, // Reduced from 40
+        height: 32, // Reduced from 40
         marginBottom: 10
     },
     cardTitle: {
-        fontSize: 16,
+        fontSize: 14, // Reduced from 16
         fontWeight: 'bold',
         color: theme.colors.text
     },

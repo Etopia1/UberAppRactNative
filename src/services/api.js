@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Production API URL - Render backend (Recommended for APK)
 const BASE_URL = 'https://uberappbackend.onrender.com/api';
-// const BASE_URL = 'http://localhost:2000/api';
+// const BASE_URL = 'http://172.20.216.100:2000/api';
 
 const api = axios.create({
     baseURL: BASE_URL,
