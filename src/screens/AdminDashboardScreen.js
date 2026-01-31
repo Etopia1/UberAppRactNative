@@ -181,7 +181,7 @@ export default function AdminDashboardScreen({ navigation }) {
     );
 
     const renderDriver = ({ item }) => (
-        <View style={styles.card}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('UserDetails', { user: item })}>
             <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
             <View style={styles.infoCol}>
                 <Text style={styles.name}>{item.name}</Text>
@@ -198,11 +198,11 @@ export default function AdminDashboardScreen({ navigation }) {
                     </TouchableOpacity>
                 )}
             </View>
-        </View>
+        </TouchableOpacity>
     );
 
     const renderUser = ({ item }) => (
-        <View style={[styles.card, item.isBanned && styles.bannedCard]}>
+        <TouchableOpacity style={[styles.card, item.isBanned && styles.bannedCard]} onPress={() => navigation.navigate('UserDetails', { user: item })}>
             <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
             <View style={styles.infoCol}>
                 <Text style={styles.name}>{item.name} {item.role === 'admin' && '🛡️'}</Text>
@@ -219,7 +219,7 @@ export default function AdminDashboardScreen({ navigation }) {
                     <Text style={styles.btnText}>{item.isBanned ? 'Unban' : 'Ban'}</Text>
                 </TouchableOpacity>
             )}
-        </View>
+        </TouchableOpacity>
     );
 
     const renderPost = ({ item }) => (

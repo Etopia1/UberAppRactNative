@@ -38,6 +38,7 @@ import GeminiScreen from '../screens/GeminiScreen';
 import DriverSignupScreen from '../screens/DriverSignupScreen';
 import DriverDashboardScreen from '../screens/DriverDashboardScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import UserDetailsScreen from '../screens/UserDetailsScreen';
 import MinimizedCall from '../components/MinimizedCall';
 import socketService from '../services/socket';
 import { CallProvider } from '../context/CallContext';
@@ -243,7 +244,10 @@ export default function AppNavigator() {
                     {isAuthenticated ? (
                         <>
                             {user?.role === 'admin' ? (
-                                <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+                                <>
+                                    <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+                                    <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+                                </>
                             ) : user?.role === 'driver' ? (
                                 <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
                             ) : (
