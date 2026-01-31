@@ -277,7 +277,11 @@ export default function ChatScreen({ route, navigation }) {
 
     const handleMessageReceived = (message) => {
         if (message.conversation === conversation._id) {
-            setMessages(prev => [...prev, message]);
+            setMessages(prev => {
+                // Prevent duplicates (if we received our own message or optimistic update match)
+                if (prev.some(m => m._id === message._id)) return prev;
+                return [...prev, message];
+            });
         }
     };
 
@@ -299,46 +303,61 @@ export default function ChatScreen({ route, navigation }) {
         const content = inputText.trim();
         const tempId = Date.now().toString();
 
-        const tempMessage = {
-            _id: tempId,
-            conversation: conversation._id,
-            sender: { _id: user.id || user._id, name: user.name, avatar: user.avatar },
-            receiver: otherUser,
-            content: content,
-            type: 'text',
-            createdAt: new Date(),
-            pending: true,
-            status: 'sent', // Initial status
-            replyTo: replyTo
-        };
+        if (editingMessage) {
+            // --- EDIT MODE ---
+            // Optimistic Update
+            setMessages(prev => prev.map(m => m._id === editingMessage._id ? { ...m, content, isEdited: true } : m));
+            setEditingMessage(null);
+            setInputText('');
+            handleStopTyping();
 
-        setMessages(prev => [...prev, tempMessage]);
-        setInputText('');
-        setReplyTo(null);
-        handleStopTyping();
-
-        try {
-            if (editingMessage) {
+            try {
                 await api.put(`/chat/messages/${editingMessage._id}`, { content });
-                setEditingMessage(null);
-            } else {
+            } catch (error) {
+                Toast.show({ type: 'error', text1: 'Failed to edit message' });
+                // Revert if failed (optional, or just show error)
+            }
+        } else {
+            // --- NEW MESSAGE MODE ---
+            const tempMessage = {
+                _id: tempId,
+                conversation: conversation._id,
+                sender: { _id: user.id || user._id, name: user.name, avatar: user.avatar },
+                receiver: otherUser,
+                content: content,
+                type: 'text',
+                createdAt: new Date(),
+                pending: true,
+                status: 'sent',
+                replyTo: replyTo
+            };
+
+            setMessages(prev => [...prev, tempMessage]);
+            setInputText('');
+            const currentReplyTo = replyTo; // Store ref
+            setReplyTo(null);
+            handleStopTyping();
+
+            try {
                 const res = await api.post('/chat/messages', {
                     conversationId: conversation._id,
                     receiverId: otherUser._id || otherUser.id,
                     content: content,
                     type: 'text',
-                    replyTo: replyTo?._id,
+                    replyTo: currentReplyTo?._id,
                 });
                 const realMessage = res.data.message;
                 // Replace temp message with real one
                 setMessages(prev => prev.map(m => m._id === tempId ? realMessage : m));
+            } catch (error) {
+                Toast.show({ type: 'error', text1: 'Failed to send message' });
+                setMessages(prev => prev.filter(m => m._id !== tempId));
+                setInputText(content); // Restore text
+                setReplyTo(currentReplyTo); // Restore reply
             }
-        } catch (error) {
-            Toast.show({ type: 'error', text1: 'Failed to send message' });
-            setMessages(prev => prev.filter(m => m._id !== tempId));
-            setInputText(content);
         }
     };
+
 
     const handleActionModal = (message) => {
         setSelectedMessage(message);
@@ -358,7 +377,7 @@ export default function ChatScreen({ route, navigation }) {
                 const senderId = selectedMessage.sender._id || selectedMessage.sender.id || selectedMessage.sender;
                 const currentUserId = user.id || user._id;
 
-                if (String(senderId) === String(currentUserId)) {
+                if (senderId.toString() === currentUserId.toString()) {
                     setEditingMessage(selectedMessage);
                     setReplyTo(null);
                     setInputText(selectedMessage.content);
@@ -370,7 +389,7 @@ export default function ChatScreen({ route, navigation }) {
                 const delSenderId = selectedMessage.sender._id || selectedMessage.sender.id || selectedMessage.sender;
                 const delCurrentUserId = user.id || user._id;
 
-                if (String(delSenderId) === String(delCurrentUserId)) {
+                if (delSenderId.toString() === delCurrentUserId.toString()) {
                     try {
                         await api.delete(`/chat/messages/${selectedMessage._id}`);
                         setMessages(prev => prev.map(m => m._id === selectedMessage._id ? { ...m, isDeleted: true, content: '🚫 This message was deleted' } : m));

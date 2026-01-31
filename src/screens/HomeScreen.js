@@ -172,12 +172,11 @@ export default function HomeScreen({ navigation }) {
                         onPress={() => navigation.navigate('RideRequest')}
                         activeOpacity={0.9}
                     >
-                        <View>
-                            <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/car.png' }} style={styles.cardIcon} />
+                        <View style={styles.cardContent}>
+                            <View style={[styles.iconCircle, { backgroundColor: '#E8F5E9' }]}>
+                                <Ionicons name="car" size={32} color="#2E7D32" />
+                            </View>
                             <Text style={styles.cardTitle}>Get Ride</Text>
-                        </View>
-                        <View style={styles.arrowContainer}>
-                            <Ionicons name="arrow-forward" size={20} color={theme.colors.text} />
                         </View>
                     </TouchableOpacity>
 
@@ -187,28 +186,30 @@ export default function HomeScreen({ navigation }) {
                         onPress={() => navigation.navigate('FlightSearch')}
                         activeOpacity={0.9}
                     >
-                        <View>
-                            <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/airplane-take-off.png' }} style={styles.cardIcon} />
+                        <View style={styles.cardContent}>
+                            <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
+                                <Ionicons name="airplane" size={32} color="#1565C0" />
+                            </View>
                             <Text style={styles.cardTitle}>Book Flight</Text>
-                        </View>
-                        <View style={styles.arrowContainer}>
-                            <Ionicons name="arrow-forward" size={20} color={theme.colors.text} />
                         </View>
                     </TouchableOpacity>
                 </View>
 
                 {/* Navigation Card (Full Width) */}
                 <TouchableOpacity
-                    style={[styles.card, styles.navCard, { width: '100%', marginBottom: 25 }]}
+                    style={[styles.card, styles.navCard, { width: '100%', marginBottom: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20 }]}
                     onPress={() => navigation.navigate('Navigation')}
                     activeOpacity={0.9}
                 >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Image source={{ uri: 'https://img.icons8.com/3d-fluency/94/map-marker.png' }} style={[styles.cardIcon, { marginBottom: 0, marginRight: 15 }]} />
-                        <Text style={styles.cardTitle}>View Routes & Traffic</Text>
+                    <View style={[styles.iconCircle, { backgroundColor: '#FFF3E0', marginRight: 15 }]}>
+                        <Ionicons name="map" size={32} color="#E65100" />
                     </View>
-                    <View style={styles.arrowContainer}>
-                        <Ionicons name="compass" size={20} color={theme.colors.text} />
+                    <View>
+                        <Text style={styles.cardTitle}>View Routes & Traffic</Text>
+                        <Text style={styles.cardSub}>Check live conditions</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Ionicons name="chevron-forward" size={24} color={theme.colors.textSecondary} />
                     </View>
                 </TouchableOpacity>
 
@@ -312,44 +313,53 @@ const styles = StyleSheet.create({
     },
     card: {
         width: (width - 65) / 2,
-        height: 120, // Reduced from 140
-        borderRadius: 20,
+        height: 130,
+        borderRadius: 24,
         padding: 15,
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.05)'
     },
     rideCard: {
-        backgroundColor: '#E8F5E9',
+        backgroundColor: '#fff',
     },
     flightCard: {
-        backgroundColor: '#E3F2FD',
+        backgroundColor: '#fff',
     },
     navCard: {
-        backgroundColor: '#FFF3E0',
+        backgroundColor: '#fff',
+        height: 100, // Shorter for nav
+        justifyContent: 'center'
     },
-    aiCard: {
-        backgroundColor: '#F3E5F5',
+    cardContent: {
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    cardIcon: {
-        width: 32, // Reduced from 40
-        height: 32, // Reduced from 40
-        marginBottom: 10
+    iconCircle: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12
     },
     cardTitle: {
-        fontSize: 14, // Reduced from 16
-        fontWeight: 'bold',
-        color: theme.colors.text
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+        textAlign: 'center'
     },
-    arrowContainer: {
-        alignSelf: 'flex-end',
-        backgroundColor: 'rgba(255,255,255,0.6)',
-        borderRadius: 15,
-        padding: 5
+    cardSub: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: 2
     },
+    // Removed old arrow container styles
     recentSection: {
         marginTop: 10
     },

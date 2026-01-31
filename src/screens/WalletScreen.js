@@ -36,7 +36,11 @@ export default function WalletScreen({ navigation }) {
 
             // Sort by date desc
             mappedTransactions.sort((a, b) => b.date - a.date);
-            setTransactions(mappedTransactions);
+
+            // Filter out zero amount transactions
+            const validTransactions = mappedTransactions.filter(t => t.amount && t.amount > 0);
+
+            setTransactions(validTransactions);
 
         } catch (error) {
             console.error('Wallet fetch error:', error);

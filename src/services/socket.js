@@ -25,7 +25,7 @@ class SocketService {
         } else {
             // Create new socket connection
             this.socket = io(SOCKET_URL, {
-                transports: ['websocket'],
+                transports: ['polling', 'websocket'], // Fallback to polling if websocket fails
                 reconnection: true,
                 reconnectionAttempts: Infinity, // Keep trying
                 reconnectionDelay: 1000,
