@@ -128,20 +128,40 @@ export default function UserDetailsScreen({ route, navigation }) {
                     <Text style={styles.infoValue}>{user.phone}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Location:</Text>
-                    <Text style={styles.infoValue}>{user.location || "Unknown"}</Text>
-                </View>
-                <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Joined:</Text>
                     <Text style={styles.infoValue}>{new Date(user.createdAt).toLocaleDateString()}</Text>
                 </View>
-                {user.role === 'driver' && (
+            </View>
+
+            {/* Location Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>
+                    {user.isOnline ? "📍 Live Location" : "🛑 Last Known Location"}
+                </Text>
+                <View style={styles.locationBox}>
+                    <Text style={styles.locationText}>{user.location || "Location not available"}</Text>
+                    {!user.isOnline && (
+                        <Text style={styles.lastSeenText}>Last seen: {user.lastSeen ? new Date(user.lastSeen).toLocaleString() : 'Unknown'}</Text>
+                    )}
+                    {user.location && (
+                        <TouchableOpacity
+                            style={styles.mapBtn}
+                            onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(user.location)}`)}
+                        >
+                            <Text style={styles.mapBtnText}>🗺️ View on Map</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+            {user.role === 'driver' && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Driver Details</Text>
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Driver ID:</Text>
                         <Text style={styles.infoValue}>{user.driverId}</Text>
                     </View>
-                )}
-            </View>
+                </View>
+            )}
 
             {/* Stats Grid */}
             <View style={styles.section}>
@@ -160,7 +180,7 @@ export default function UserDetailsScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <View style={{ height: 50 }} />
-        </ScrollView>
+        </ScrollView >
     );
 }
 
@@ -333,5 +353,35 @@ const styles = StyleSheet.create({
     backButtonText: {
         color: '#666',
         fontWeight: '600'
+    },
+    locationBox: {
+        backgroundColor: '#F5F7FA',
+        padding: 15,
+        borderRadius: 10,
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.primary
+    },
+    locationText: {
+        fontSize: 16,
+        color: '#333',
+        fontWeight: '500',
+        marginBottom: 5
+    },
+    lastSeenText: {
+        fontSize: 12,
+        color: '#888',
+        marginBottom: 10,
+        fontStyle: 'italic'
+    },
+    mapBtn: {
+        marginTop: 10,
+        backgroundColor: '#E3F2FD',
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 8
+    },
+    mapBtnText: {
+        color: theme.colors.primary,
+        fontWeight: 'bold'
     }
 });

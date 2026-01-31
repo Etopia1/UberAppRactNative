@@ -208,7 +208,7 @@ export default function AdminDashboardScreen({ navigation }) {
                 <Text style={styles.name}>{item.name} {item.role === 'admin' && '🛡️'}</Text>
                 <Text style={styles.subtext}>{item.email}</Text>
                 <Text style={[styles.roleBadge, { backgroundColor: item.role === 'driver' ? '#E3F2FD' : '#F3E5F5', color: item.role === 'driver' ? '#1976D2' : '#7B1FA2' }]}>
-                    {item.role.toUpperCase()}
+                    {(item.role || 'unknown').toUpperCase()}
                 </Text>
             </View>
             {item.role !== 'admin' && (
