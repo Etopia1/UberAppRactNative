@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import { useDispatch } from 'react-redux';
 import { setCredentials, setLoading, setError } from '../redux/slices/authSlice';
 import api from '../services/api';
@@ -17,6 +18,9 @@ export default function GoogleLoginButton() {
         androidClientId: '265406180637-rrsltocqfo89i5mka9eei4mhrpb1sgmo.apps.googleusercontent.com',
         iosClientId: 'YOUR_IOS_CLIENT_ID',
         webClientId: '265406180637-er3lo5vshpi6ptsudg6kkne48jomsgjm.apps.googleusercontent.com',
+        redirectUri: AuthSession.makeRedirectUri({
+            useProxy: true,
+        }),
         prompt: 'select_account', // Forces Google to show account picker
     });
 

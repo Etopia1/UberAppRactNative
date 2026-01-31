@@ -10,27 +10,37 @@ const screenWidth = Dimensions.get('window').width;
 
 export default function AdminDashboardScreen({ navigation }) {
     const [activeTab, setActiveTab] = useState('stats'); // stats | drivers | users | posts
-    const [stats, setStats] = useState({ users: 0, drivers: 0, posts: 0 });
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const dispatch = useDispatch();
+    const [stats, setStats] = useState({
+        users: 0,
+        drivers: 0,
+        posts: 0,
+        rides: 0,
+        flights: 0,
+        revenue: 0,
+        topUser: null
+    });
 
-    useEffect(() => {
-        fetchData();
-        if (activeTab === 'stats') fetchStats();
-    }, [activeTab]);
+    // ...
 
     const fetchStats = async () => {
         try {
-            const [usersRes, driversRes, postsRes] = await Promise.all([
+            const [usersRes, driversRes, postsRes, advStatsRes] = await Promise.all([
                 api.get('/admin/users'),
                 api.get('/driver/all'),
-                api.get('/admin/posts')
+                api.get('/admin/posts'),
+                api.get('/admin/stats')
             ]);
+
+            const adv = advStatsRes.data.stats;
+
             setStats({
                 users: usersRes.data.users?.length || 0,
                 drivers: driversRes.data.drivers?.length || 0,
-                posts: postsRes.data.posts?.length || 0
+                posts: postsRes.data.posts?.length || 0,
+                rides: adv.totalRides || 0,
+                flights: adv.totalFlights || 0,
+                revenue: adv.totalRevenue || 0,
+                topUser: adv.topUser
             });
         } catch (error) {
             console.error('Stats Error:', error);
@@ -273,10 +283,30 @@ export default function AdminDashboardScreen({ navigation }) {
             {activeTab === 'stats' && !loading ? (
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <View style={styles.statsRow}>
+                        <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} color="#4CAF50" />
                         <StatCard title="Total Users" value={stats.users} color="#2196F3" />
-                        <StatCard title="Drivers" value={stats.drivers} color="#FF9800" />
-                        <StatCard title="Posts" value={stats.posts} color="#9C27B0" />
                     </View>
+                    <View style={styles.statsRow}>
+                        <StatCard title="Rides" value={stats.rides} color="#FF9800" />
+                        <StatCard title="Flights" value={stats.flights} color="#00BCD4" />
+                        <StatCard title="Drivers" value={stats.drivers} color="#9C27B0" />
+                    </View>
+
+                    {stats.topUser && (
+                        <View style={styles.topUserCard}>
+                            <Text style={styles.sectionTitle}>🏆 Top User of the Month</Text>
+                            <View style={styles.topUserRow}>
+                                <Image source={{ uri: stats.topUser.avatar || 'https://i.pravatar.cc/300' }} style={styles.topUserAvatar} />
+                                <View>
+                                    <Text style={styles.topUserName}>{stats.topUser.name}</Text>
+                                    <Text style={styles.topUserDetail}>{stats.topUser.email}</Text>
+                                    <Text style={styles.topUserStats}>
+                                        🚗 {stats.topUser.rideCount} Rides  |  💸 ${stats.topUser.totalSpent.toLocaleString()} Spent
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
                     {renderChart()}
                 </ScrollView>
             ) : null}
@@ -549,5 +579,45 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 30,
         color: '#888'
+    },
+    topUserCard: {
+        backgroundColor: '#fff', // Gold/Yellow tint could be nice 'FFF9C4' but keeping clean white
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FFD700', // Gold border
+        shadowColor: "#FFD700",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5
+    },
+    topUserRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10
+    },
+    topUserAvatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        marginRight: 15,
+        borderWidth: 2,
+        borderColor: '#FFD700'
+    },
+    topUserName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333'
+    },
+    topUserDetail: {
+        color: '#666',
+        fontSize: 12
+    },
+    topUserStats: {
+        marginTop: 5,
+        fontWeight: 'bold',
+        color: theme.colors.primary
     }
 });
