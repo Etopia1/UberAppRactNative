@@ -45,6 +45,16 @@ export const registerForPushNotificationsAsync = async () => {
         return;
     }
 
+    // Get the token using the Project ID from app.json
+    try {
+        const projectId = '943d08cd-090d-4ba0-8e19-2ba2c9217017'; // From app.json
+        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        token = tokenData.data;
+        console.log('✅ Expo Push Token:', token);
+    } catch (error) {
+        console.error('❌ Error fetching push token:', error);
+    }
+
     return token;
 };
 

@@ -1,14 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, Image, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { theme } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import api from '../services/api';
+import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
 
 export default function TicketReceiptScreen({ route, navigation }) {
     const { booking, flightDetails } = route.params;
+    const [simulating, setSimulating] = useState(false);
 
     const generateHtml = () => {
         return `
@@ -105,6 +108,42 @@ export default function TicketReceiptScreen({ route, navigation }) {
         }
     };
 
+    const handleSimulateLanding = async () => {
+        if (!booking?._id) return;
+        setSimulating(true);
+        try {
+            const response = await api.post(`/flight/${booking._id}/simulate-landing`);
+            Toast.show({
+                type: 'success',
+                text1: 'Flight Landed! 🛬',
+                text2: 'Auto-ride has been triggered.'
+            });
+            // Show auto-ride details if available
+            if (response.data.autoRide) {
+                setTimeout(() => {
+                    Alert.alert(
+                        'Ride Auto-Booked',
+                        `Your driver is on the way to ${flightDetails.arrival.airport}!\nRide ID: ${response.data.autoRide._id}`,
+                        [{ text: 'View Ride', onPress: () => navigation.navigate('MainTab') }] // Go to Home (MainTab)
+                    );
+                }, 1000);
+            }
+        } catch (error) {
+            console.error('Simulation Error:', error);
+            Toast.show({ type: 'error', text1: 'Simulation Failed', text2: 'Could not land flight.' });
+        } finally {
+            setSimulating(false);
+        }
+    };
+
+    const handleBackToHome = () => {
+        // RESET FIX: Navigate to MainTab, not Home directly
+        navigation.reset({
+            index: 0,
+            routes: [{ name: 'MainTab' }],
+        });
+    };
+
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
             <View style={styles.receiptCard}>
@@ -186,13 +225,29 @@ export default function TicketReceiptScreen({ route, navigation }) {
                 </View>
             </View>
 
+            {/* DEMO: Simulate Landing Button */}
+            <TouchableOpacity
+                style={[styles.simButton, simulating && styles.simButtonDisabled]}
+                onPress={handleSimulateLanding}
+                disabled={simulating}
+            >
+                {simulating ? (
+                    <ActivityIndicator color={theme.colors.primary} />
+                ) : (
+                    <>
+                        <Ionicons name="airplane-outline" size={24} color={theme.colors.primary} style={{ marginRight: 10 }} />
+                        <Text style={styles.simButtonText}>Demo: Simulate Flight Landing</Text>
+                    </>
+                )}
+            </TouchableOpacity>
+
             {/* Actions */}
             <TouchableOpacity style={styles.actionButton} onPress={handlePrint}>
                 <Ionicons name="download-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
                 <Text style={styles.actionText}>Download / Share Ticket</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('Home')}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleBackToHome}>
                 <Text style={styles.secondaryText}>Back to Home</Text>
             </TouchableOpacity>
 
@@ -203,7 +258,7 @@ export default function TicketReceiptScreen({ route, navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212', // Dark background
+        backgroundColor: '#121212',
     },
     content: {
         padding: 20,
@@ -215,7 +270,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 20,
         overflow: 'hidden',
-        marginBottom: 30,
+        marginBottom: 20,
         elevation: 5,
         shadowColor: '#000',
         shadowOpacity: 0.3,
@@ -290,7 +345,7 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: '#121212', // Match screen background
+        backgroundColor: '#121212',
         position: 'absolute',
         top: -12
     },
@@ -367,5 +422,26 @@ const styles = StyleSheet.create({
     secondaryText: {
         color: '#666',
         fontSize: 16
+    },
+    simButton: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        paddingVertical: 15,
+        paddingHorizontal: 30,
+        borderRadius: 30,
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: theme.colors.primary
+    },
+    simButtonDisabled: {
+        opacity: 0.7
+    },
+    simButtonText: {
+        color: theme.colors.primary,
+        fontSize: 16,
+        fontWeight: 'bold'
     }
 });

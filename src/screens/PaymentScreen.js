@@ -48,64 +48,13 @@ export default function PaymentScreen({ route, navigation }) {
 
     const handlePaymentSuccess = async (amount) => {
         try {
-            // Create Booking in Backend
-            // Extract user ID from Redux if available, or assume backend gets it from token?
-            // Since we don't have redux here, assume the api wrapper handles token auth. 
-            // We need userId for the body though.
-            // Best practice: The backend should get user from token.
-            // But verify Booking model requirement.
-
-            // For now, we will try to get user from global state if we can import store, or pass it in params.
-            // But let's assume backend extract user from req.user (standard).
-            // Actually PaymentScreen receives `user` from useSelector ideally.
-
-            const bookingDetails = {
-                type: 'flight',
-                amount: amount,
-                details: {
-                    airline: flight.airline,
-                    origin: flight.departure.airport,
-                    destination: flight.arrival.airport,
-                    flightNumber: flight.id,
-                    date: flight.departure.time
-                }
-            };
-
-            // We need to fetch current user ID to pass to booking if backend requires it in body
-            // Or assume authentication middle ware handles it.
-            // Let's rely on api wrapper sending the token.
-
-            // Wait, we need the user ID. Let's get it from Async Storage or assume backend uses req.user.id
-            // Ideally we should use selector, but to avoid hooks order mess let's keep it simple.
-
             console.log('✅ Payment Confirmed. Creating Booking...');
 
             // Call API to create booking
             const userString = await import('@react-native-async-storage/async-storage').then(m => m.default.getItem('user'));
             const user = userString ? JSON.parse(userString) : {};
 
-            const response = await api.post('/bookings', {
-                userId: user.id || user._id,
-                type: 'flight',
-                amount: amount,
-                status: 'confirmed',
-                details: bookingDetails.details,
-                flightDetails: flight, // Pass full flight details if backend needs it for PNR
-                passengers: 1 // Default
-            });
-
-            // The backend 'flightController.bookFlight' returns { booking: ..., pnr: ... }
-            // Adaptation: If using the generic /bookings route (bookingController? or flightController booked via specific route?)
-            // Wait, previous steps showed I edited 'flightController.bookFlight'.
-            // But here it calls '/bookings'. I need to check if '/bookings' maps to 'flightController.bookFlight'.
-            // Actually, usually '/bookings' is for generic bookings. 
-            // The 'flightController.bookFlight' might be mapped to '/flight/book'.
-
-            // Correction: I should call the specialized flight booking endpoint if I want the real Amadeus Booking.
-            // Let's check finding from previous turn or assume I need to call '/flight/book'.
-            // Checking FlightSearchScreen or similar might reveal it, but I see `flightController.js` had `bookFlight`.
-            // Let's assume for now I should call `/flight/book` to trigger the Amadeus logic I wrote.
-
+            // ONLY call the specialized flight booking endpoint
             const bookingResponse = await api.post('/flight/book', {
                 userId: user.id || user._id,
                 flightDetails: flight,
@@ -135,7 +84,18 @@ export default function PaymentScreen({ route, navigation }) {
         } catch (error) {
             console.error('Booking Creation Failed:', error);
             setProcessing(false);
-            Toast.show({ type: 'error', text1: 'Payment Charged but Booking Failed', text2: 'Contact Support' });
+
+            if (error.response?.status === 409) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Price Change',
+                    text2: 'The flight price has changed. Please search again.'
+                });
+                // Optionally navigate back to search
+                setTimeout(() => navigation.navigate('FlightSearch'), 2000);
+            } else {
+                Toast.show({ type: 'error', text1: 'Payment Charged but Booking Failed', text2: 'Contact Support' });
+            }
         }
     };
 

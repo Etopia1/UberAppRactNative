@@ -6,33 +6,46 @@ const { width } = Dimensions.get('window');
 
 const SplashScreen = ({ onFinish }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.8)).current;
+    const scaleAnim = useRef(new Animated.Value(0.5)).current; // Start smaller for pop effect
 
     useEffect(() => {
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 1,
-                duration: 800,
+                duration: 1000,
                 useNativeDriver: true,
             }),
             Animated.spring(scaleAnim, {
                 toValue: 1,
-                friction: 4,
+                friction: 5,
+                tension: 40,
                 useNativeDriver: true,
             })
         ]).start();
 
         const timer = setTimeout(() => {
-            onFinish();
-        }, 3000);
+            // Fade out before finishing
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 500,
+                useNativeDriver: true
+            }).start(() => onFinish());
+        }, 2500);
 
         return () => clearTimeout(timer);
     }, []);
 
     return (
         <View style={styles.container}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
-                <Text style={styles.logoText}>DRIVEN</Text>
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
+                {/* Use the same logo as native splash for seamless feel */}
+                <Image
+                    source={require('../../assets/mylogo.png')}
+                    style={styles.logo}
+                    resizeMode="contain"
+                />
+
+                {/* Optional: Keep text if user wants, but logo is primary */}
                 <Text style={styles.tagline}>Move Better. Live Better.</Text>
             </Animated.View>
         </View>
@@ -42,24 +55,21 @@ const SplashScreen = ({ onFinish }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000000',
+        backgroundColor: '#000000', // Match native splash background
         justifyContent: 'center',
         alignItems: 'center',
     },
-    logoText: {
-        fontSize: 56,
-        fontWeight: '900',
-        color: '#4CAF50',
-        letterSpacing: 4,
-        textAlign: 'center',
+    logo: {
+        width: width * 0.6,
+        height: width * 0.6, // Adjust aspect ratio as needed
+        marginBottom: 20
     },
     tagline: {
-        fontSize: 16,
-        color: '#FFFFFF',
-        marginTop: 10,
-        letterSpacing: 1.5,
-        textAlign: 'center',
-        opacity: 0.8,
+        fontSize: 14,
+        color: '#888888',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        opacity: 0.9,
     }
 });
 

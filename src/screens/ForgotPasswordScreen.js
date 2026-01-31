@@ -11,7 +11,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     const handleSendCode = async () => {
         if (!email) {
-            Toast.show({ type: 'error', text1: 'Email Required', text2: 'Please enter your email' });
+            Toast.show({ type: 'error', text1: 'Input Required', text2: 'Please enter your email or Driver ID' });
             return;
         }
 
@@ -19,7 +19,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         try {
             await api.post('/auth/forgot-password', { email });
             Toast.show({ type: 'success', text1: 'Code Sent', text2: 'Check your email for OTP' });
-            navigation.navigate('ResetPassword', { email });
+            navigation.navigate('VerifyResetOTP', { email });
         } catch (error) {
             Toast.show({
                 type: 'error',
@@ -42,30 +42,30 @@ export default function ForgotPasswordScreen({ navigation }) {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Text style={styles.backArrow}>←</Text>
                     </TouchableOpacity>
-                    <Image 
-                        source={{ uri: 'https://img.icons8.com/3d-fluency/94/lock-2.png' }} 
-                        style={styles.logo} 
+                    <Image
+                        source={{ uri: 'https://img.icons8.com/3d-fluency/94/lock-2.png' }}
+                        style={styles.logo}
                     />
                     <Text style={styles.title}>Forgot Password?</Text>
-                    <Text style={styles.subtitle}>Don't worry! It happens. Please enter the email associated with your account.</Text>
+                    <Text style={styles.subtitle}>Don't worry! It happens. Please enter the email or Driver ID associated with your account.</Text>
                 </View>
 
                 <View style={styles.form}>
                     <View style={styles.inputWrapper}>
-                        <Text style={styles.label}>Email Address</Text>
+                        <Text style={styles.label}>Email or Driver ID</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Enter your email"
+                            placeholder="Enter your email or Driver ID"
                             placeholderTextColor="#999"
                             value={email}
                             onChangeText={setEmail}
                             autoCapitalize="none"
-                            keyboardType="email-address"
+                            keyboardType="default"
                         />
                     </View>
 
-                    <TouchableOpacity 
-                        style={[styles.sendBtn, loading && styles.btnDisabled]} 
+                    <TouchableOpacity
+                        style={[styles.sendBtn, loading && styles.btnDisabled]}
                         onPress={handleSendCode}
                         disabled={loading}
                     >

@@ -8,11 +8,10 @@ import { theme } from '../constants/theme';
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiZXRvcGlhMTIzNCIsImEiOiJjbWtzMDZtenUxN3NlM2VzOTJobnp5dm1jIn0.nJ-d1lTNg9LBgfxp9BOR5A';
 MapboxGL.setAccessToken(MAPBOX_TOKEN);
 
-export default function Map({ origin, destination, onMapReady, nearbyDrivers = [] }) {
+export default function Map({ origin, destination, onMapReady, nearbyDrivers = [], routeGeoJSON }) {
   const cameraRef = useRef(null);
   const [userLocation, setUserLocation] = useState(null);
 
-  // Request Location permissions if not already granted (though usually parent does this)
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -27,22 +26,21 @@ export default function Map({ origin, destination, onMapReady, nearbyDrivers = [
     <View style={styles.container}>
       <MapboxGL.MapView
         style={styles.map}
-        styleURL={MapboxGL.StyleURL.Dark} // Using Dark theme as requested "Green Luxury" base
+        styleURL={MapboxGL.StyleURL.Dark}
         logoEnabled={false}
-        attributionEnabled={false} // Clean look, check license compliance for prod
+        attributionEnabled={false}
         onDidFinishLoadingMap={onMapReady}
       >
         <MapboxGL.Camera
           ref={cameraRef}
           zoomLevel={14}
-          centerCoordinate={userLocation || [0, 0]} // Default center
-          followUserLocation={!destination} // Follow user if no destination set
+          centerCoordinate={userLocation || [0, 0]}
+          followUserLocation={!destination && !routeGeoJSON}
           followUserMode="normal"
           animationMode="flyTo"
           animationDuration={2000}
         />
 
-        {/* User Location Indicator */}
         <MapboxGL.UserLocation
           visible={true}
           showsUserHeadingIndicator={true}
@@ -88,7 +86,21 @@ export default function Map({ origin, destination, onMapReady, nearbyDrivers = [
           </MapboxGL.PointAnnotation>
         ))}
 
-        {/* Route Line would go here with ShapeSource + LineLayer using Directions API response */}
+        {/* Dynamic Route Line */}
+        {routeGeoJSON && (
+          <MapboxGL.ShapeSource id="routeSource" shape={routeGeoJSON}>
+            <MapboxGL.LineLayer
+              id="routeFill"
+              style={{
+                lineColor: theme.colors.primary,
+                lineWidth: 5,
+                lineCap: 'round',
+                lineJoin: 'round',
+                lineOpacity: 0.8
+              }}
+            />
+          </MapboxGL.ShapeSource>
+        )}
 
       </MapboxGL.MapView>
     </View>

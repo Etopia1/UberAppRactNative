@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-logo.png",
+      "image": "./assets/mylogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.driven",
+      "package": "com.etopia.driven",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -47,12 +47,12 @@
         }
       ]
     ],
-    "owner": "etopia1",
     "extra": {
       "MAPBOX_ACCESS_TOKEN": "pk.eyJ1IjoiZXRvcGlhMTIzNCIsImEiOiJjbWtzMDZtenUxN3NlM2VzOTJobnp5dm1jIn0.nJ-d1lTNg9LBgfxp9BOR5A",
       "eas": {
-        "projectId": "bdd7c8f7-43f3-4d31-a03b-64adcac5b14e"
+        "projectId": "b4090e00-9f15-40ba-9740-ba365576ee63"
       }
-    }
+    },
+    "owner": "dot_un"
   }
 }

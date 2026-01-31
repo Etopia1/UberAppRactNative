@@ -35,6 +35,9 @@ import TransactionHistoryScreen from '../screens/TransactionHistoryScreen';
 import CallScreen from '../screens/CallScreen';
 import NavigationScreen from '../screens/NavigationScreen';
 import GeminiScreen from '../screens/GeminiScreen';
+import DriverSignupScreen from '../screens/DriverSignupScreen';
+import DriverDashboardScreen from '../screens/DriverDashboardScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import MinimizedCall from '../components/MinimizedCall';
 import socketService from '../services/socket';
 import { CallProvider } from '../context/CallContext';
@@ -239,7 +242,13 @@ export default function AppNavigator() {
                 <Stack.Navigator screenOptions={{ headerShown: false }}>
                     {isAuthenticated ? (
                         <>
-                            <Stack.Screen name="MainTab" component={MainTabNavigator} />
+                            {user?.role === 'admin' ? (
+                                <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+                            ) : user?.role === 'driver' ? (
+                                <Stack.Screen name="DriverDashboard" component={DriverDashboardScreen} />
+                            ) : (
+                                <Stack.Screen name="MainTab" component={MainTabNavigator} />
+                            )}
                             <Stack.Screen name="FlightSearch" component={FlightSearchScreen} />
                             <Stack.Screen name="Payment" component={PaymentScreen} />
                             <Stack.Screen name="RideRequest" component={RideRequestScreen} />
@@ -269,6 +278,7 @@ export default function AppNavigator() {
                             )}
                             <Stack.Screen name="Login" component={LoginScreen} />
                             <Stack.Screen name="Signup" component={SignupScreen} />
+                            <Stack.Screen name="DriverSignup" component={DriverSignupScreen} />
                             <Stack.Screen name="OTP" component={OTPScreen} />
                             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />

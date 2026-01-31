@@ -1,20 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { theme } from '../constants/theme';
 import { useSelector } from 'react-redux';
 import api from '../services/api';
+import { useNavigation } from '@react-navigation/native';
 
 export default function BookingsScreen() {
     const user = useSelector(state => state.auth.user);
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const navigation = useNavigation();
 
     const fetchBookings = async () => {
         try {
             const userId = user.id || user._id; // Handle both id formats
             const response = await api.get(`/bookings/${userId}`);
-            setBookings(response.data.bookings || []);
+
+            const allBookings = response.data.bookings || [];
+
+            // FILTER: Only show bookings that have a valid price
+            const validBookings = allBookings.filter(booking =>
+                (booking.price != null && booking.price > 0) ||
+                (booking.totalPrice != null && booking.totalPrice > 0)
+            );
+
+            setBookings(validBookings);
         } catch (error) {
             console.error('Error fetching bookings:', error);
         } finally {
@@ -32,8 +43,36 @@ export default function BookingsScreen() {
         fetchBookings();
     };
 
+    const handlePressBooking = (item) => {
+        // Construct flightDetails object expected by TicketReceiptScreen
+        const flightDetails = {
+            airline: item.airline,
+            flightNumber: item.flightNumber,
+            logo: 'https://img.icons8.com/color/48/airplane-take-off.png', // Default, or specific if saved
+            departure: {
+                airport: item.origin,
+                time: item.departureTime || '12:00' // Use saved time or default
+            },
+            arrival: {
+                airport: item.destination,
+                time: '--:--' // Arrival time might not be saved in simplified booking model
+            },
+            duration: 'Flight',
+            price: item.price || item.totalPrice
+        };
+
+        navigation.navigate('TicketReceipt', {
+            booking: item,
+            flightDetails: flightDetails
+        });
+    };
+
     const renderBookingItem = ({ item }) => (
-        <View style={styles.card}>
+        <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.9}
+            onPress={() => handlePressBooking(item)}
+        >
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Image source={{ uri: 'https://img.icons8.com/color/48/airplane-take-off.png' }} style={styles.logo} />
@@ -50,7 +89,7 @@ export default function BookingsScreen() {
             <View style={styles.routeRow}>
                 <View>
                     <Text style={styles.code}>{item.origin}</Text>
-                    {/* <Text style={styles.time}>{item.departureTime}</Text> */}
+                    <Text style={styles.time}>{item.departureTime || '12:00'}</Text>
                 </View>
                 <Text style={styles.arrow}>→</Text>
                 <View>
@@ -63,7 +102,7 @@ export default function BookingsScreen() {
                 <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
                 <Text style={styles.price}>${item.price || item.totalPrice}</Text>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 
     return (
@@ -78,7 +117,7 @@ export default function BookingsScreen() {
                     renderItem={renderBookingItem}
                     contentContainerStyle={styles.list}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                    ListEmptyComponent={<Text style={styles.empty}>No bookings yet.</Text>}
+                    ListEmptyComponent={<Text style={styles.empty}>No bookings found.</Text>}
                 />
             )}
         </View>
@@ -141,6 +180,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10
     },
     code: { fontSize: 32, fontWeight: '900', color: '#1a1a1a', letterSpacing: 1 },
+    time: { fontSize: 13, color: '#888', textAlign: 'center', marginTop: 5 },
     arrow: { fontSize: 28, color: '#e0e0e0', marginTop: -4 },
     // Ticket Footer
     footer: {

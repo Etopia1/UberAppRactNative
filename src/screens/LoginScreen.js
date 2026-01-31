@@ -40,6 +40,26 @@ export default function LoginScreen({ navigation }) {
             console.error('Login Error:', error);
             dispatch(setError(error.message));
 
+            if (error.response?.status === 403 && error.response?.data?.requiresAdminApproval) {
+                Toast.show({
+                    type: 'info',
+                    text1: 'Approval Pending ⏳',
+                    text2: 'Your account is waiting for Admin approval.',
+                    visibilityTime: 4000
+                });
+                return;
+            }
+
+            if (error.response?.status === 403 && error.response?.data?.requiresVerification) {
+                Toast.show({
+                    type: 'info',
+                    text1: 'Verification Required',
+                    text2: 'Please verify your email to continue.',
+                });
+                navigation.navigate('OTP', { email: error.response.data.email });
+                return;
+            }
+
             // Safety wrapper for Toast
             try {
                 Toast.show({
@@ -64,10 +84,10 @@ export default function LoginScreen({ navigation }) {
 
             <View style={styles.form}>
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email</Text>
+                    <Text style={styles.label}>Email or Driver ID</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="example@gmail.com"
+                        placeholder="example@gmail.com or DRV-12345"
                         placeholderTextColor={theme.colors.darkGray}
                         value={email}
                         onChangeText={setEmail}
@@ -112,6 +132,14 @@ export default function LoginScreen({ navigation }) {
                         <Text style={styles.link}>Sign Up</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Driver Signup Link */}
+                <TouchableOpacity
+                    style={{ marginTop: 20, alignSelf: 'center' }}
+                    onPress={() => navigation.navigate('DriverSignup')}
+                >
+                    <Text style={{ color: theme.colors.primary, fontSize: 16 }}>Drive with Driven 🚗</Text>
+                </TouchableOpacity>
             </View>
         </View>
     );

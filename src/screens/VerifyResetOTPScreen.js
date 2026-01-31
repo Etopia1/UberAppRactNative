@@ -11,10 +11,8 @@ import {
     Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
+import api from '../services/api';
 import Toast from 'react-native-toast-message';
-
-const API_URL = 'https://uberappbackend.onrender.com/api';
 
 const VerifyResetOTPScreen = ({ route, navigation }) => {
     const { email } = route.params;
@@ -52,7 +50,7 @@ const VerifyResetOTPScreen = ({ route, navigation }) => {
 
         setLoading(true);
         try {
-            const response = await axios.post(`${API_URL}/auth/verify-reset-otp`, {
+            const response = await api.post('/auth/verify-reset-otp', {
                 email,
                 otp
             });
@@ -77,7 +75,7 @@ const VerifyResetOTPScreen = ({ route, navigation }) => {
     const handleResendOTP = async () => {
         setResending(true);
         try {
-            await axios.post(`${API_URL}/auth/resend-otp`, {
+            await api.post('/auth/resend-otp', {
                 email,
                 type: 'forgot-password'
             });
