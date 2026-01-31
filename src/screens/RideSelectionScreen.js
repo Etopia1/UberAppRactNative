@@ -39,14 +39,13 @@ export default function RideSelectionScreen({ navigation, route }) {
         const car = cars.find(c => c.id === selectedCar);
 
         if (paymentMethod === 'wallet' && walletBalance < car.price) {
-            Alert.alert(
-                'Insufficient Funds',
-                `Your wallet balance is $${walletBalance.toFixed(2)}. This ride costs $${car.price.toFixed(2)}.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Add Funds', onPress: () => navigation.navigate('FundWallet') }
-                ]
-            );
+            Toast.show({
+                type: 'error',
+                text1: 'Insufficient Funds',
+                text2: `Balance: $${walletBalance.toFixed(2)}. Please add funds.`,
+                visibilityTime: 5000,
+                onPress: () => navigation.navigate('FundWallet')
+            });
             return;
         }
 

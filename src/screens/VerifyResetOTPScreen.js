@@ -39,12 +39,12 @@ const VerifyResetOTPScreen = ({ route, navigation }) => {
 
     const handleVerifyOTP = async () => {
         if (!otp) {
-            Alert.alert('Error', 'Please enter the OTP');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Please enter the OTP' });
             return;
         }
 
         if (otp.length !== 4) {
-            Alert.alert('Error', 'OTP must be 4 digits');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'OTP must be 4 digits' });
             return;
         }
 
@@ -63,10 +63,11 @@ const VerifyResetOTPScreen = ({ route, navigation }) => {
                 });
             }
         } catch (error) {
-            Alert.alert(
-                'Error',
-                error.response?.data?.message || 'Invalid OTP. Please try again.'
-            );
+            Toast.show({
+                type: 'error',
+                text1: 'Verification Failed',
+                text2: error.response?.data?.message || 'Invalid OTP. Please try again.'
+            });
         } finally {
             setLoading(false);
         }
@@ -84,10 +85,11 @@ const VerifyResetOTPScreen = ({ route, navigation }) => {
             setTimer(60);
             setCanResend(false);
         } catch (error) {
-            Alert.alert(
-                'Error',
-                error.response?.data?.message || 'Failed to resend OTP'
-            );
+            Toast.show({
+                type: 'error',
+                text1: 'Resend Failed',
+                text2: error.response?.data?.message || 'Failed to resend OTP'
+            });
         } finally {
             setResending(false);
         }

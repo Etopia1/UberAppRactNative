@@ -103,7 +103,7 @@ export default function TicketReceiptScreen({ route, navigation }) {
             const { uri } = await Print.printToFileAsync({ html: generateHtml() });
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
         } catch (error) {
-            Alert.alert('Error', 'Failed to generate receipt');
+            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to generate receipt' });
             console.error('Print error:', error);
         }
     };
@@ -120,13 +120,16 @@ export default function TicketReceiptScreen({ route, navigation }) {
             });
             // Show auto-ride details if available
             if (response.data.autoRide) {
+                // Navigate seamlessly instead of chaining alerts
                 setTimeout(() => {
-                    Alert.alert(
-                        'Ride Auto-Booked',
-                        `Your driver is on the way to ${flightDetails.arrival.airport}!\nRide ID: ${response.data.autoRide._id}`,
-                        [{ text: 'View Ride', onPress: () => navigation.navigate('MainTab') }] // Go to Home (MainTab)
-                    );
-                }, 1000);
+                    Toast.show({
+                        type: 'info',
+                        text1: 'Ride Booked 🚗',
+                        text2: `Driver is en route! ID: ${response.data.autoRide._id}`,
+                        visibilityTime: 4000
+                    });
+                    navigation.navigate('MainTab');
+                }, 1500);
             }
         } catch (error) {
             console.error('Simulation Error:', error);

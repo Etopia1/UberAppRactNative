@@ -29,7 +29,7 @@ const DriverFirstTimePasswordScreen = ({ route, navigation }) => {
 
     const handleVerifyOTP = async () => {
         if (!otp || otp.length !== 4) {
-            Alert.alert('Error', 'Please enter the 4-digit OTP');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Please enter the 4-digit OTP' });
             return;
         }
 
@@ -39,17 +39,17 @@ const DriverFirstTimePasswordScreen = ({ route, navigation }) => {
 
     const handleSetPassword = async () => {
         if (!newPassword || !confirmPassword) {
-            Alert.alert('Error', 'Please fill all fields');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Please fill all fields' });
             return;
         }
 
         if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Passwords do not match' });
             return;
         }
 
         if (newPassword.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters');
+            Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Password must be at least 6 characters' });
             return;
         }
 
@@ -62,16 +62,20 @@ const DriverFirstTimePasswordScreen = ({ route, navigation }) => {
                 confirmPassword
             });
 
-            Alert.alert(
-                'Success!',
-                'Your password has been set successfully. You can now login.',
-                [{ text: 'Login Now', onPress: () => navigation.navigate('Login') }]
-            );
+            Toast.show({
+                type: 'success',
+                text1: 'Success!',
+                text2: 'Password set successfully. Taking you to Login.',
+                visibilityTime: 4000
+            });
+            setTimeout(() => navigation.navigate('Login'), 2000);
+
         } catch (error) {
-            Alert.alert(
-                'Error',
-                error.response?.data?.message || 'Failed to set password'
-            );
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: error.response?.data?.message || 'Failed to set password'
+            });
         } finally {
             setLoading(false);
         }

@@ -1,6 +1,43 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Alert, Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
+
+
+
+export const pickImage = async (useCamera = false) => {
+    try {
+        const { status } = useCamera
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (status !== 'granted') {
+            Toast.show({ type: 'error', text1: 'Permission Required', text2: 'Please grant camera/media permissions.' });
+            return null;
+        }
+
+        const result = useCamera
+            ? await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            })
+            : await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+        if (!result.canceled) {
+            return result.assets[0];
+        }
+    } catch (error) {
+        console.error('Image picker error:', error);
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to pick image' });
+    }
+    return null;
+};
 
 // Request permissions
 export const requestPermissions = async () => {
@@ -8,33 +45,10 @@ export const requestPermissions = async () => {
     const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera and media library permissions to send images and videos.');
+        Toast.show({ type: 'error', text1: 'Permission Denied', text2: 'Camera/Media permissions required.' });
         return false;
     }
     return true;
-};
-
-// Pick image from gallery
-export const pickImage = async () => {
-    try {
-        const hasPermission = await requestPermissions();
-        if (!hasPermission) return null;
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 0.8,
-            aspect: [4, 3]
-        });
-
-        if (!result.canceled) {
-            return result.assets[0];
-        }
-        return null;
-    } catch (error) {
-        console.error('Pick image error:', error);
-        return null;
-    }
 };
 
 // Pick any media (image or video) from gallery
@@ -62,11 +76,7 @@ export const pickMedia = async () => {
     } catch (error) {
         console.error('Pick media error:', error);
         if (Platform.OS === 'web' && error.message?.includes('Unsupported file type')) {
-            Alert.alert(
-                'File Type Error',
-                'The browser rejected this file type. Please try using the "Video" or "Document" option instead.',
-                [{ text: 'OK' }]
-            );
+            Toast.show({ type: 'error', text1: 'File Type Error', text2: 'Browser rejected file type.' });
         }
         return null;
     }
@@ -90,7 +100,7 @@ export const takePhoto = async () => {
         return null;
     } catch (error) {
         console.error('Take photo error:', error);
-        Alert.alert('Error', 'Failed to take photo');
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to take photo' });
         return null;
     }
 };
@@ -99,7 +109,7 @@ export const takePhoto = async () => {
 export const recordVideo = async () => {
     try {
         if (Platform.OS === 'web') {
-            Alert.alert('Not Supported', 'Video recording is not available in the browser. Please use the "Video" option to upload a file.');
+            Toast.show({ type: 'info', text1: 'Not Supported', text2: 'Video recording unavailable in browser.' });
             return null;
         }
 
@@ -121,7 +131,7 @@ export const recordVideo = async () => {
         return null;
     } catch (error) {
         console.error('Record video error:', error);
-        Alert.alert('Error', 'Failed to record video');
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to record video' });
         return null;
     }
 };
@@ -182,7 +192,7 @@ export const pickDocument = async () => {
         return null;
     } catch (error) {
         console.error('Pick document error:', error);
-        Alert.alert('Error', 'Failed to pick document');
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to pick document' });
         return null;
     }
 };
