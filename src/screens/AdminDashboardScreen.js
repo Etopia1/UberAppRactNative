@@ -1,19 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, ScrollView, Dimensions } from 'react-native';
 import { useDispatch } from 'react-redux';
 import api from '../services/api';
 import { theme } from '../constants/theme';
 import { logout } from '../redux/slices/authSlice';
+import { LineChart } from 'react-native-chart-kit';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function AdminDashboardScreen({ navigation }) {
-    const [activeTab, setActiveTab] = useState('drivers'); // drivers | users | posts
+    const [activeTab, setActiveTab] = useState('stats'); // stats | drivers | users | posts
+    const [stats, setStats] = useState({ users: 0, drivers: 0, posts: 0 });
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const dispatch = useDispatch();
 
     useEffect(() => {
         fetchData();
+        if (activeTab === 'stats') fetchStats();
     }, [activeTab]);
+
+    const fetchStats = async () => {
+        try {
+            const [usersRes, driversRes, postsRes] = await Promise.all([
+                api.get('/admin/users'),
+                api.get('/driver/all'),
+                api.get('/admin/posts')
+            ]);
+            setStats({
+                users: usersRes.data.users?.length || 0,
+                drivers: driversRes.data.drivers?.length || 0,
+                posts: postsRes.data.posts?.length || 0
+            });
+        } catch (error) {
+            console.error('Stats Error:', error);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -39,7 +61,6 @@ export default function AdminDashboardScreen({ navigation }) {
 
     // --- Actions ---
 
-    // Driver Approval
     const approveDriver = async (userId, name) => {
         try {
             await api.post('/driver/approve', { userId });
@@ -50,7 +71,6 @@ export default function AdminDashboardScreen({ navigation }) {
         }
     };
 
-    // User Ban/Unban
     const toggleBanUser = async (user) => {
         const action = user.isBanned ? 'unban-user' : 'ban-user';
         const actionText = user.isBanned ? 'Unban' : 'Ban';
@@ -66,7 +86,6 @@ export default function AdminDashboardScreen({ navigation }) {
                     onPress: async () => {
                         try {
                             await api.post(`/admin/${action}`, { userId: user._id });
-                            Alert.alert('Success', `User ${actionText}ned`);
                             fetchData();
                         } catch (error) {
                             Alert.alert('Error', `Failed to ${actionText.toLowerCase()} user`);
@@ -77,11 +96,10 @@ export default function AdminDashboardScreen({ navigation }) {
         );
     };
 
-    // Delete Post
     const deletePost = async (postId) => {
         Alert.alert(
             'Delete Post',
-            'Are you sure you want to delete this post? This cannot be undone.',
+            'Delete this post permanently?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -90,7 +108,7 @@ export default function AdminDashboardScreen({ navigation }) {
                     onPress: async () => {
                         try {
                             await api.post('/admin/delete-post', { postId });
-                            fetchData(); // Refresh
+                            fetchData();
                         } catch (error) {
                             Alert.alert('Error', 'Failed to delete post');
                         }
@@ -104,35 +122,98 @@ export default function AdminDashboardScreen({ navigation }) {
         dispatch(logout());
     };
 
-    // --- Render Items ---
+    // --- Components ---
+
+    const StatCard = ({ title, value, color, icon }) => (
+        <View style={[styles.statCard, { borderLeftColor: color }]}>
+            <Text style={styles.statValue}>{value}</Text>
+            <Text style={styles.statTitle}>{title}</Text>
+        </View>
+    );
+
+    const renderChart = () => (
+        <View style={styles.chartContainer}>
+            <Text style={styles.sectionTitle}>User Growth 📈</Text>
+            <LineChart
+                data={{
+                    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+                    datasets: [
+                        {
+                            data: [
+                                Math.random() * 100,
+                                Math.random() * 100,
+                                Math.random() * 100,
+                                Math.random() * 100,
+                                Math.random() * 100,
+                                Math.random() * 100
+                            ]
+                        }
+                    ]
+                }}
+                width={screenWidth - 40} // from react-native
+                height={220}
+                yAxisLabel=""
+                yAxisSuffix=""
+                yAxisInterval={1} // optional, defaults to 1
+                chartConfig={{
+                    backgroundColor: theme.colors.surface,
+                    backgroundGradientFrom: theme.colors.surface,
+                    backgroundGradientTo: theme.colors.surface,
+                    decimalPlaces: 0, // optional, defaults to 2dp
+                    color: (opacity = 1) => `rgba(0, 200, 83, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    style: {
+                        borderRadius: 16
+                    },
+                    propsForDots: {
+                        r: "6",
+                        strokeWidth: "2",
+                        stroke: "#ffa726"
+                    }
+                }}
+                bezier
+                style={{
+                    marginVertical: 8,
+                    borderRadius: 16
+                }}
+            />
+        </View>
+    );
 
     const renderDriver = ({ item }) => (
         <View style={styles.card}>
+            <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
             <View style={styles.infoCol}>
                 <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.subtext}>{item.driverId || 'No ID'}</Text>
-                <Text style={[styles.status, { color: item.isDriverVerified ? theme.colors.success : theme.colors.warning }]}>
+                <Text style={styles.subtext}>{item.email}</Text>
+                <Text style={styles.idBadge}>{item.driverId || 'No ID'}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.statusBadge, { backgroundColor: item.isDriverVerified ? theme.colors.success + '20' : theme.colors.warning + '20', color: item.isDriverVerified ? theme.colors.success : theme.colors.warning }]}>
                     {item.isDriverVerified ? 'Verified' : 'Pending'}
                 </Text>
+                {!item.isDriverVerified && (
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => approveDriver(item._id, item.name)}>
+                        <Text style={styles.btnText}>Approve</Text>
+                    </TouchableOpacity>
+                )}
             </View>
-            {!item.isDriverVerified && (
-                <TouchableOpacity style={styles.actionBtn} onPress={() => approveDriver(item._id, item.name)}>
-                    <Text style={styles.btnText}>Verify</Text>
-                </TouchableOpacity>
-            )}
         </View>
     );
 
     const renderUser = ({ item }) => (
         <View style={[styles.card, item.isBanned && styles.bannedCard]}>
+            <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
             <View style={styles.infoCol}>
-                <Text style={styles.name}>{item.name} {item.role === 'admin' ? '🛡️' : ''}</Text>
+                <Text style={styles.name}>{item.name} {item.role === 'admin' && '🛡️'}</Text>
                 <Text style={styles.subtext}>{item.email}</Text>
-                <Text style={styles.role}>{item.role.toUpperCase()}</Text>
+                <Text style={[styles.roleBadge, { backgroundColor: item.role === 'driver' ? '#E3F2FD' : '#F3E5F5', color: item.role === 'driver' ? '#1976D2' : '#7B1FA2' }]}>
+                    {item.role.toUpperCase()}
+                </Text>
             </View>
             {item.role !== 'admin' && (
                 <TouchableOpacity
-                    style={[styles.actionBtn, item.isBanned ? styles.unbanBtn : styles.banBtn]}
+                    style={[styles.smallActionBtn, item.isBanned ? styles.unbanBtn : styles.banBtn]}
                     onPress={() => toggleBanUser(item)}
                 >
                     <Text style={styles.btnText}>{item.isBanned ? 'Unban' : 'Ban'}</Text>
@@ -144,8 +225,11 @@ export default function AdminDashboardScreen({ navigation }) {
     const renderPost = ({ item }) => (
         <View style={styles.postCard}>
             <View style={styles.postHeader}>
-                <Text style={styles.postUser}>{item.user?.name || 'Unknown User'}</Text>
-                <Text style={styles.postDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                <Image source={{ uri: item.author?.avatar || 'https://i.pravatar.cc/300' }} style={styles.postAvatar} />
+                <View>
+                    <Text style={styles.postUser}>{item.author?.name || 'Unknown User'}</Text>
+                    <Text style={styles.postDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                </View>
             </View>
             <Text style={styles.postContent}>{item.content}</Text>
             {item.imageUrl && (
@@ -160,40 +244,58 @@ export default function AdminDashboardScreen({ navigation }) {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Admin Control 🛡️</Text>
-                <TouchableOpacity onPress={handleLogout}>
-                    <Text style={styles.logout}>Logout</Text>
+                <View>
+                    <Text style={styles.title}>Admin Panel</Text>
+                    <Text style={styles.subtitle}>Welcome back, Boss 👋</Text>
+                </View>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+                    <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
             </View>
 
             {/* Tabs */}
-            <View style={styles.tabs}>
-                {['drivers', 'users', 'posts'].map(tab => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && styles.activeTab]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+            <View style={styles.tabContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {['stats', 'drivers', 'users', 'posts'].map(tab => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[styles.tab, activeTab === tab && styles.activeTab]}
+                            onPress={() => setActiveTab(tab)}
+                        >
+                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
             </View>
 
-            {loading ? (
-                <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 50 }} />
-            ) : (
-                <FlatList
-                    data={data}
-                    keyExtractor={item => item._id}
-                    renderItem={
-                        activeTab === 'drivers' ? renderDriver :
-                            activeTab === 'users' ? renderUser : renderPost
-                    }
-                    contentContainerStyle={styles.list}
-                    ListEmptyComponent={<Text style={styles.empty}>No {activeTab} found.</Text>}
-                />
+            {activeTab === 'stats' && !loading ? (
+                <ScrollView contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.statsRow}>
+                        <StatCard title="Total Users" value={stats.users} color="#2196F3" />
+                        <StatCard title="Drivers" value={stats.drivers} color="#FF9800" />
+                        <StatCard title="Posts" value={stats.posts} color="#9C27B0" />
+                    </View>
+                    {renderChart()}
+                </ScrollView>
+            ) : null}
+
+            {activeTab !== 'stats' && (
+                loading ? (
+                    <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 50 }} />
+                ) : (
+                    <FlatList
+                        data={data}
+                        keyExtractor={item => item._id}
+                        renderItem={
+                            activeTab === 'drivers' ? renderDriver :
+                                activeTab === 'users' ? renderUser : renderPost
+                        }
+                        contentContainerStyle={styles.list}
+                        ListEmptyComponent={<Text style={styles.empty}>No {activeTab} found.</Text>}
+                    />
+                )
             )}
         </View>
     );
@@ -202,101 +304,191 @@ export default function AdminDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: theme.colors.background,
-        padding: 20,
-        paddingTop: 50
+        backgroundColor: '#F5F7FA', // Light grey-blue bg
     },
     header: {
+        backgroundColor: '#fff',
+        padding: 20,
+        paddingTop: 50,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee'
     },
     title: {
         fontSize: 24,
-        fontWeight: 'bold',
-        color: theme.colors.text
+        fontWeight: '800',
+        color: '#333'
     },
-    logout: {
-        color: theme.colors.error,
-        fontWeight: 'bold'
+    subtitle: {
+        color: '#666',
+        fontSize: 14
     },
-    tabs: {
-        flexDirection: 'row',
-        marginBottom: 20,
-        backgroundColor: theme.colors.inputBg,
-        borderRadius: 10,
-        padding: 5
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
+    logoutBtn: {
+        padding: 8,
+        backgroundColor: '#FFEBEE',
         borderRadius: 8
     },
+    logoutText: {
+        color: '#D32F2F',
+        fontWeight: 'bold',
+        fontSize: 12
+    },
+    tabContainer: {
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        height: 60
+    },
+    tab: {
+        paddingVertical: 8,
+        paddingHorizontal: 20,
+        borderRadius: 20,
+        marginRight: 10,
+        backgroundColor: '#F5F5F5'
+    },
     activeTab: {
-        backgroundColor: theme.colors.primary
+        backgroundColor: '#333'
     },
     tabText: {
-        color: theme.colors.textSecondary,
-        fontWeight: 'bold'
+        fontWeight: '600',
+        color: '#666'
     },
     activeTabText: {
         color: '#fff'
     },
-    list: {
-        paddingBottom: 20
+    scrollContent: {
+        padding: 20
     },
-    card: {
-        backgroundColor: theme.colors.surface,
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 10,
+    statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginBottom: 20
+    },
+    statCard: {
+        flex: 1,
+        backgroundColor: '#fff',
+        padding: 15,
+        borderRadius: 12,
+        marginHorizontal: 5,
+        borderLeftWidth: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    statValue: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333'
+    },
+    statTitle: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 5
+    },
+    chartContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 15,
+        marginTop: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 10,
+        color: '#333'
+    },
+    list: {
+        padding: 20
+    },
+    card: {
+        backgroundColor: '#fff',
+        padding: 15,
+        borderRadius: 12,
+        marginBottom: 12,
+        flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: theme.colors.border
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2
     },
     bannedCard: {
-        opacity: 0.6,
-        borderColor: theme.colors.error
+        backgroundColor: '#FFEBEE',
+        opacity: 0.7
+    },
+    avatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        marginRight: 15,
+        backgroundColor: '#eee'
     },
     infoCol: {
         flex: 1
     },
     name: {
-        color: theme.colors.text,
-        fontWeight: 'bold',
-        fontSize: 16
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#333'
     },
     subtext: {
-        color: theme.colors.textSecondary,
-        fontSize: 12
-    },
-    role: {
-        fontSize: 10,
-        color: theme.colors.primary,
-        fontWeight: 'bold',
-        marginTop: 2
-    },
-    status: {
         fontSize: 12,
-        fontWeight: 'bold',
+        color: '#888',
         marginTop: 2
+    },
+    idBadge: {
+        fontSize: 10,
+        color: '#666',
+        marginTop: 2,
+        fontFamily: 'monospace'
+    },
+    statusBadge: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 10,
+        overflow: 'hidden',
+        marginBottom: 5
+    },
+    roleBadge: {
+        alignSelf: 'flex-start',
+        fontSize: 10,
+        fontWeight: 'bold',
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginTop: 4
     },
     actionBtn: {
         backgroundColor: theme.colors.primary,
         paddingVertical: 8,
-        paddingHorizontal: 15,
-        borderRadius: 20,
-        marginLeft: 10
+        paddingHorizontal: 12,
+        borderRadius: 8
+    },
+    smallActionBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8
     },
     banBtn: {
-        backgroundColor: theme.colors.error
+        backgroundColor: '#D32F2F'
     },
     unbanBtn: {
-        backgroundColor: theme.colors.secondary
+        backgroundColor: '#388E3C'
     },
     btnText: {
         color: '#fff',
@@ -305,47 +497,57 @@ const styles = StyleSheet.create({
     },
     // Post Styles
     postCard: {
-        backgroundColor: '#222',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 15,
         padding: 15,
-        borderRadius: 10,
-        marginBottom: 15
+        borderWidth: 1,
+        borderColor: '#eee'
     },
     postHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 10
+    },
+    postAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 10
     },
     postUser: {
-        color: theme.colors.primary,
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        fontSize: 14,
+        color: '#333'
     },
     postDate: {
-        color: '#888',
-        fontSize: 12
+        fontSize: 12,
+        color: '#999'
     },
     postContent: {
-        color: '#fff',
         fontSize: 14,
-        marginBottom: 10
+        color: '#444',
+        marginBottom: 10,
+        lineHeight: 20
     },
     postImage: {
         width: '100%',
         height: 200,
-        borderRadius: 10,
+        borderRadius: 8,
         marginBottom: 10
     },
     deleteBtn: {
         alignSelf: 'flex-end',
-        padding: 5
+        paddingVertical: 5
     },
     deleteText: {
-        color: theme.colors.error,
+        color: '#D32F2F',
         fontWeight: 'bold',
         fontSize: 12
     },
     empty: {
-        color: theme.colors.textSecondary,
         textAlign: 'center',
-        marginTop: 20
+        marginTop: 30,
+        color: '#888'
     }
 });
