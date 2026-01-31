@@ -1,45 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { theme } from '../constants/theme';
-
-// Robust local dataset to ensure "no errors" and instant suggestions
-const MAJOR_AIRPORTS = [
-    { iata: 'JFK', city: 'New York', name: 'John F. Kennedy International Airport' },
-    { iata: 'LHR', city: 'London', name: 'Heathrow Airport' },
-    { iata: 'DXB', city: 'Dubai', name: 'Dubai International Airport' },
-    { iata: 'LAX', city: 'Los Angeles', name: 'Los Angeles International Airport' },
-    { iata: 'CDG', city: 'Paris', name: 'Charles de Gaulle Airport' },
-    { iata: 'HND', city: 'Tokyo', name: 'Haneda Airport' },
-    { iata: 'SIN', city: 'Singapore', name: 'Changi Airport' },
-    { iata: 'FRA', city: 'Frankfurt', name: 'Frankfurt Airport' },
-    { iata: 'AMS', city: 'Amsterdam', name: 'Schiphol Airport' },
-    { iata: 'ORD', city: 'Chicago', name: 'O\'Hare International Airport' },
-    { iata: 'YYZ', city: 'Toronto', name: 'Pearson International Airport' },
-    { iata: 'SYD', city: 'Sydney', name: 'Kingsford Smith Airport' },
-    { iata: 'LOS', city: 'Lagos', name: 'Murtala Muhammed International Airport' },
-    { iata: 'JNB', city: 'Johannesburg', name: 'O.R. Tambo International Airport' },
-    { iata: 'CAI', city: 'Cairo', name: 'Cairo International Airport' },
-    { iata: 'ACC', city: 'Accra', name: 'Kotoka International Airport' },
-    { iata: 'NBO', city: 'Nairobi', name: 'Jomo Kenyatta International Airport' }
-];
+import api from '../services/api';
+import { ActivityIndicator } from 'react-native';
 
 export default function AirportAutocomplete({ placeholder, initialValue, onSelect, zIndex }) {
     const [query, setQuery] = useState(initialValue || '');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
 
+    const [loading, setLoading] = useState(false);
+
     useEffect(() => {
-        if (query.length > 0) {
-            const filtered = MAJOR_AIRPORTS.filter(airport =>
-                airport.city.toLowerCase().includes(query.toLowerCase()) ||
-                airport.iata.toLowerCase().includes(query.toLowerCase()) ||
-                airport.name.toLowerCase().includes(query.toLowerCase())
-            );
-            setSuggestions(filtered);
-            setShowSuggestions(true);
-        } else {
-            setShowSuggestions(false);
-        }
+        const fetchAirports = async () => {
+            if (query.length < 2) {
+                setShowSuggestions(false);
+                return;
+            }
+
+            setLoading(true);
+            try {
+                // Call Backend Amadeus Proxy
+                const response = await api.get(`/flight/locations?keyword=${query}`);
+                if (response.data.results) {
+                    const formatted = response.data.results.map(item => ({
+                        iata: item.iataCode,
+                        city: item.detailedName.split(',')[0], // Extract City
+                        name: item.name,
+                        raw: item
+                    }));
+                    setSuggestions(formatted);
+                    setShowSuggestions(true);
+                }
+            } catch (error) {
+                console.log('Airport Search Error:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        const debounce = setTimeout(fetchAirports, 500); // 500ms debounce
+        return () => clearTimeout(debounce);
     }, [query]);
 
     const handleSelect = (airport) => {
@@ -50,16 +51,25 @@ export default function AirportAutocomplete({ placeholder, initialValue, onSelec
 
     return (
         <View style={[styles.container, { zIndex: zIndex || 1 }]}>
-            <TextInput
-                style={styles.input}
-                placeholder={placeholder}
-                placeholderTextColor={theme.colors.darkGray}
-                value={query}
-                onChangeText={setQuery}
-                onFocus={() => {
-                    if (query.length > 0) setShowSuggestions(true);
-                }}
-            />
+            <View>
+                <TextInput
+                    style={styles.input}
+                    placeholder={placeholder}
+                    placeholderTextColor={theme.colors.darkGray}
+                    value={query}
+                    onChangeText={setQuery}
+                    onFocus={() => {
+                        if (query.length > 0) setShowSuggestions(true);
+                    }}
+                />
+                {loading && (
+                    <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                        style={{ position: 'absolute', right: 15, top: 15 }}
+                    />
+                )}
+            </View>
 
             {showSuggestions && suggestions.length > 0 && (
                 <View style={styles.dropdown}>

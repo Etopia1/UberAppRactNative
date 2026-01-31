@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions } from 
 import Map from '../components/Map';
 import { theme } from '../constants/theme';
 import Toast from 'react-native-toast-message';
+import * as Location from 'expo-location';
 
 const { height } = Dimensions.get('window');
 
@@ -13,6 +14,29 @@ export default function RideRequestScreen({ navigation, route }) {
     useEffect(() => {
         if (route.params?.pickup) {
             setPickup(route.params.pickup); // Auto-fill from suggestion
+        } else {
+            // Auto-fetch current address if no param passed
+            (async () => {
+                try {
+                    const { status } = await Location.requestForegroundPermissionsAsync();
+                    if (status !== 'granted') return;
+
+                    const loc = await Location.getCurrentPositionAsync({});
+                    const address = await Location.reverseGeocodeAsync({
+                        latitude: loc.coords.latitude,
+                        longitude: loc.coords.longitude
+                    });
+
+                    if (address && address.length > 0) {
+                        const addr = address[0];
+                        // Format: "123 Main St, City"
+                        const formatted = `${addr.street || addr.name || ''} ${addr.city || ''}`.trim();
+                        if (formatted) setPickup(formatted);
+                    }
+                } catch (error) {
+                    console.log('Reverse Geocode Error:', error);
+                }
+            })();
         }
     }, [route.params]);
 
