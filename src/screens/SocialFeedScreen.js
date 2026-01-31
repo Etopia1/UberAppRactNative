@@ -86,66 +86,33 @@ export default function SocialFeedScreen({ navigation }) {
         const isMyPost = String(postAuthorId).toString() === String(currentUserId).toString();
 
         if (isMyPost) {
-            Alert.alert(
-                'Post Options',
-                'Choose an action',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Delete Post',
-                        style: 'destructive',
-                        onPress: () => {
-                            Alert.alert('Confirm Delete', 'Are you sure you want to delete this post?', [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Delete', style: 'destructive', onPress: () => handleDeletePost(post._id) }
-                            ]);
-                        }
-                    }
-                ]
-            );
+            // Direct Delete (User requested no alerts)
+            handleDeletePost(post._id);
         } else {
-            Alert.alert(
-                'Post Options',
-                'Choose an action',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Report Post', onPress: () => Toast.show({ type: 'info', text1: 'Reported', text2: 'Thank you for your feedback.' }) }
-                ]
-            );
+            // Direct Report
+            Toast.show({ type: 'success', text1: 'Reported', text2: 'Thanks for your feedback.' });
         }
     };
 
-    const handleShare = (post) => {
-        Alert.alert(
-            'Share Post',
-            'Share this post to your feed?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Share',
-                    onPress: async () => {
-                        try {
-                            const response = await api.post('/social/posts', {
-                                content: '', // Empty content for direct share, or prompts user
-                                sharedPost: post._id
-                            });
-                            // Optimistic update or refresh
-                            Toast.show({ type: 'success', text1: 'Post shared!' });
-                            // Update local state to increment share count
-                            setPosts(prev => prev.map(p => {
-                                if (p._id === post._id) {
-                                    return { ...p, shares: (p.shares || 0) + 1 };
-                                }
-                                return p;
-                            }));
-                        } catch (error) {
-                            console.error('Share error:', error);
-                            Toast.show({ type: 'error', text1: 'Failed to share post' });
-                        }
-                    }
+    const handleShare = async (post) => {
+        // Direct Share
+        try {
+            const response = await api.post('/social/posts', {
+                content: '',
+                sharedPost: post._id
+            });
+            Toast.show({ type: 'success', text1: 'Post shared to your feed!' });
+            // Optimistic update
+            setPosts(prev => prev.map(p => {
+                if (p._id === post._id) {
+                    return { ...p, shares: (p.shares || 0) + 1 };
                 }
-            ]
-        );
+                return p;
+            }));
+        } catch (error) {
+            console.error('Share error:', error);
+            Toast.show({ type: 'error', text1: 'Failed to share post' });
+        }
     };
 
     const renderPost = ({ item }) => {

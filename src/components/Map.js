@@ -30,6 +30,10 @@ export default function Map({ origin, destination, onMapReady, nearbyDrivers = [
         logoEnabled={false}
         attributionEnabled={false}
         onDidFinishLoadingMap={onMapReady}
+        scrollEnabled={true}
+        zoomEnabled={true}
+        pitchEnabled={true}
+        rotateEnabled={true}
       >
         <MapboxGL.Camera
           ref={cameraRef}

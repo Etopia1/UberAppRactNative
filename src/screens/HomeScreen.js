@@ -48,11 +48,11 @@ export default function HomeScreen({ navigation }) {
                         bounciness: 8
                     }).start();
                 } else if (gestureState.dy > 80) {
-                    // Dragged DOWN -> Minimize (But keep content visible)
+                    // Dragged DOWN -> Minimize to Peek
                     Animated.spring(panY, {
-                        toValue: 150, // Peeking mode
+                        toValue: 500, // Much lower to reveal Map
                         useNativeDriver: false,
-                        bounciness: 8
+                        bounciness: 6
                     }).start();
                 } else {
                     // Small drag -> Snap to Default (Middle)

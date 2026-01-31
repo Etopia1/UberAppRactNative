@@ -5,6 +5,7 @@ import api from '../services/api';
 import { theme } from '../constants/theme';
 import { logout } from '../redux/slices/authSlice';
 import { LineChart, BarChart } from 'react-native-chart-kit';
+import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web' || screenWidth > 768;
@@ -65,7 +66,7 @@ export default function AdminDashboardScreen({ navigation }) {
             setData(response?.data?.drivers || response?.data?.users || response?.data?.posts || []);
         } catch (error) {
             console.error(error);
-            Alert.alert('Error', 'Failed to fetch data');
+            Toast.show({ type: 'error', text1: 'Data Error', text2: 'Failed to fetch dashboard data.' });
         } finally {
             setLoading(false);
         }
@@ -75,32 +76,36 @@ export default function AdminDashboardScreen({ navigation }) {
     const approveDriver = async (userId, name) => {
         try {
             await api.post('/driver/approve', { userId });
-            Alert.alert('Success', `Driver ${name} approved!`);
+            Toast.show({ type: 'success', text1: 'Driver Approved', text2: `${name} is now verified!` });
             fetchData();
-        } catch (error) { Alert.alert('Error', 'Failed to approve driver'); }
+        } catch (error) {
+            Toast.show({ type: 'error', text1: 'Approval Failed', text2: 'Could not approve driver.' });
+        }
     };
 
     const toggleBanUser = async (user) => {
         const action = user.isBanned ? 'unban-user' : 'ban-user';
-        Alert.alert('Confirm Action', `Are you sure you want to ${user.isBanned ? 'unban' : 'ban'} ${user.name}?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Confirm', style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await api.post(`/admin/${action}`, { userId: user._id });
-                        fetchData();
-                    } catch (error) { Alert.alert('Error', 'Failed to update user status'); }
-                }
-            }
-        ]);
+        // Direct action without blocking Alert (User preference)
+        try {
+            await api.post(`/admin/${action}`, { userId: user._id });
+            Toast.show({
+                type: 'success',
+                text1: `User ${user.isBanned ? 'Unbanned' : 'Banned'}`,
+                text2: `${user.name} has been updated.`
+            });
+            fetchData();
+        } catch (error) {
+            Toast.show({ type: 'error', text1: 'Action Failed', text2: 'Could not update user status.' });
+        }
     };
 
     const deletePost = async (postId) => {
         try {
             await api.post('/admin/delete-post', { postId });
+            // User requested NO ALERT. Just refresh.
+            // Toast.show({ type: 'success', text1: 'Deleted' }); // Optional but "no alert" usually means silent or toast.
             fetchData();
-        } catch (error) { Alert.alert('Error', 'Failed to delete post'); }
+        } catch (error) { console.error('Delete failed:', error); }
     };
 
     const handleLogout = () => dispatch(logout());
@@ -246,8 +251,8 @@ export default function AdminDashboardScreen({ navigation }) {
                         </TouchableOpacity>
                     )}
                     {activeTab === 'posts' && (
-                        <TouchableOpacity style={styles.deleteBtn} onPress={() => deletePost(item._id)}>
-                            <Text style={styles.btnText}>Delete</Text>
+                        <TouchableOpacity style={styles.iconBtn} onPress={() => deletePost(item._id)}>
+                            <Text style={{ fontSize: 20, color: '#888' }}>⋮</Text>
                         </TouchableOpacity>
                     )}
                 </TouchableOpacity>

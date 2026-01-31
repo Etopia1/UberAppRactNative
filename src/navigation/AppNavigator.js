@@ -8,6 +8,7 @@ import { incrementUnreadCount, setTotalUnreadCount } from '../redux/slices/chatS
 import api from '../services/api'; // Added missing import
 import SplashScreen from '../screens/SplashScreen';
 import * as Notifications from 'expo-notifications';
+import Toast from 'react-native-toast-message';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -120,23 +121,26 @@ export default function AppNavigator() {
             socketService.connect(userId);
 
             const handleFlightLanded = (data) => {
-                Alert.alert(
-                    'Flight Landed! 🛬',
-                    data.autoRide
-                        ? 'Your ride has been automatically booked and is on its way.'
-                        : 'Your flight has landed safely.',
-                    [
-                        {
-                            text: 'Track Ride',
-                            onPress: () => {
-                                if (data.autoRide && navigationRef.current) {
-                                    navigationRef.current.navigate('DriverArrival', { rideId: data.autoRide._id });
-                                }
-                            }
-                        },
-                        { text: 'OK', style: 'cancel' }
-                    ]
-                );
+                // "Real" Experience: Seamlessly transition or notify without blocking Alert
+                if (data.autoRide) {
+                    // Navigate immediately to Driver Tracking
+                    if (navigationRef.current) {
+                        navigationRef.current.navigate('DriverArrival', { rideId: data.autoRide._id });
+                    }
+                    Toast.show({
+                        type: 'success',
+                        text1: 'Flight Landed! 🛬',
+                        text2: 'Your driver has been automatically dispatched.',
+                        visibilityTime: 4000
+                    });
+                } else {
+                    Toast.show({
+                        type: 'success',
+                        text1: 'Flight Landed! 🛬',
+                        text2: 'Welcome to your destination.',
+                        visibilityTime: 4000
+                    });
+                }
             };
 
             const handleNotification = (data) => {

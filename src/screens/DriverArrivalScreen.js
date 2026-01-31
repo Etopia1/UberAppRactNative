@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { theme } from '../constants/theme';
+import Toast from 'react-native-toast-message';
 import socketService from '../services/socket';
 import api from '../services/api';
 
@@ -62,7 +63,7 @@ export default function DriverArrivalScreen({ route, navigation }) {
             }
         } catch (error) {
             console.error('Error fetching ride status:', error);
-            Alert.alert('Error', 'Could not fetch ride status');
+            Toast.show({ type: 'error', text1: 'Sync Error', text2: 'Could not fetch ride status' });
         }
     };
 
@@ -121,7 +122,13 @@ export default function DriverArrivalScreen({ route, navigation }) {
                         </View>
                     </View>
                     <View style={styles.actions}>
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Calling...', 'Dialing driver...')}>
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => {
+                            if (rideData?.driver?.phone) {
+                                Linking.openURL(`tel:${rideData.driver.phone}`);
+                            } else {
+                                Toast.show({ type: 'error', text1: 'No Phone Number', text2: 'Driver contact unavailable.' });
+                            }
+                        }}>
                             <Text style={styles.actionIcon}>📞</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Chat', { otherUser: rideData?.driver })}>

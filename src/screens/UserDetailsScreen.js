@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Alert, Linking, Dimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Linking, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../constants/theme';
 import api from '../services/api';
+import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
 
@@ -12,28 +13,15 @@ export default function UserDetailsScreen({ route, navigation }) {
 
     const toggleBanUser = async () => {
         const action = user.isBanned ? 'unban-user' : 'ban-user';
-        const actionText = user.isBanned ? 'Unban' : 'Ban';
+        const actionText = user.isBanned ? 'Unbanned' : 'Banned';
 
-        Alert.alert(
-            `Confirm ${actionText}`,
-            `Are you sure you want to ${actionText.toLowerCase()} ${user.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: actionText,
-                    style: user.isBanned ? 'default' : 'destructive',
-                    onPress: async () => {
-                        try {
-                            await api.post(`/admin/${action}`, { userId: user._id });
-                            setUser({ ...user, isBanned: !user.isBanned });
-                            Alert.alert('Success', `User ${actionText}ned`);
-                        } catch (error) {
-                            Alert.alert('Error', `Failed to ${actionText.toLowerCase()} user`);
-                        }
-                    }
-                }
-            ]
-        );
+        try {
+            await api.post(`/admin/${action}`, { userId: user._id });
+            setUser({ ...user, isBanned: !user.isBanned });
+            Toast.show({ type: 'success', text1: 'Success', text2: `User ${actionText}` });
+        } catch (error) {
+            Toast.show({ type: 'error', text1: 'Error', text2: `Failed to update user.` });
+        }
     };
 
     const callUser = () => {
@@ -175,8 +163,9 @@ export default function UserDetailsScreen({ route, navigation }) {
                 </View>
             </View>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.backButtonText}>← Back to Dashboard</Text>
+            {/* Top Left Back Button */}
+            <TouchableOpacity style={styles.topBackBtn} onPress={() => navigation.goBack()}>
+                <Text style={{ fontSize: 24, color: '#fff' }}>←</Text>
             </TouchableOpacity>
 
             <View style={{ height: 50 }} />
@@ -373,15 +362,20 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         fontStyle: 'italic'
     },
-    mapBtn: {
-        marginTop: 10,
-        backgroundColor: '#E3F2FD',
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 8
-    },
     mapBtnText: {
         color: theme.colors.primary,
         fontWeight: 'bold'
+    },
+    topBackBtn: {
+        position: 'absolute',
+        top: 40,
+        left: 20,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10
     }
 });
