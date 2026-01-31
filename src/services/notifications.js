@@ -13,6 +13,12 @@ Notifications.setNotificationHandler({
 export const registerForPushNotificationsAsync = async () => {
     let token;
 
+
+    if (Platform.OS === 'web') {
+        console.log('Web Push not configured - skipping token registration.');
+        return null;
+    }
+
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('messages', {
             name: 'Messages',

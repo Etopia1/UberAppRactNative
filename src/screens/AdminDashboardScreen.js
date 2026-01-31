@@ -1,28 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, ScrollView, Dimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image, ScrollView, Dimensions, Platform } from 'react-native';
 import { useDispatch } from 'react-redux';
 import api from '../services/api';
 import { theme } from '../constants/theme';
 import { logout } from '../redux/slices/authSlice';
-import { LineChart } from 'react-native-chart-kit';
+import { LineChart, BarChart } from 'react-native-chart-kit';
 
-const screenWidth = Dimensions.get('window').width;
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const isWeb = Platform.OS === 'web' || screenWidth > 768;
 
 export default function AdminDashboardScreen({ navigation }) {
-    const [activeTab, setActiveTab] = useState('stats'); // stats | drivers | users | posts
+    const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | drivers | users | posts
     const [stats, setStats] = useState({
-        users: 0,
-        drivers: 0,
-        posts: 0,
-        rides: 0,
-        flights: 0,
-        revenue: 0,
-        topUser: null
+        users: 0, drivers: 0, posts: 0,
+        rides: 0, flights: 0, revenue: 0,
+        topUser: null,
+        revenueChart: { labels: [], data: [0] }
     });
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const dispatch = useDispatch();
 
-    // ...
+    useEffect(() => {
+        if (activeTab === 'dashboard') fetchStats();
+        else fetchData();
+    }, [activeTab]);
 
     const fetchStats = async () => {
+        setLoading(true);
         try {
             const [usersRes, driversRes, postsRes, advStatsRes] = await Promise.all([
                 api.get('/admin/users'),
@@ -32,7 +37,6 @@ export default function AdminDashboardScreen({ navigation }) {
             ]);
 
             const adv = advStatsRes.data.stats;
-
             setStats({
                 users: usersRes.data.users?.length || 0,
                 drivers: driversRes.data.drivers?.length || 0,
@@ -40,10 +44,13 @@ export default function AdminDashboardScreen({ navigation }) {
                 rides: adv.totalRides || 0,
                 flights: adv.totalFlights || 0,
                 revenue: adv.totalRevenue || 0,
-                topUser: adv.topUser
+                topUser: adv.topUser,
+                revenueChart: adv.revenueChart || { labels: ["No Data"], data: [0] }
             });
         } catch (error) {
             console.error('Stats Error:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -51,16 +58,11 @@ export default function AdminDashboardScreen({ navigation }) {
         setLoading(true);
         try {
             let response;
-            if (activeTab === 'drivers') {
-                response = await api.get('/driver/all');
-                setData(response.data.drivers || []);
-            } else if (activeTab === 'users') {
-                response = await api.get('/admin/users');
-                setData(response.data.users || []);
-            } else if (activeTab === 'posts') {
-                response = await api.get('/admin/posts');
-                setData(response.data.posts || []);
-            }
+            if (activeTab === 'drivers') response = await api.get('/driver/all');
+            else if (activeTab === 'users') response = await api.get('/admin/users');
+            else if (activeTab === 'posts') response = await api.get('/admin/posts');
+
+            setData(response?.data?.drivers || response?.data?.users || response?.data?.posts || []);
         } catch (error) {
             console.error(error);
             Alert.alert('Error', 'Failed to fetch data');
@@ -70,554 +72,289 @@ export default function AdminDashboardScreen({ navigation }) {
     };
 
     // --- Actions ---
-
     const approveDriver = async (userId, name) => {
         try {
             await api.post('/driver/approve', { userId });
             Alert.alert('Success', `Driver ${name} approved!`);
             fetchData();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to approve driver');
-        }
+        } catch (error) { Alert.alert('Error', 'Failed to approve driver'); }
     };
 
     const toggleBanUser = async (user) => {
         const action = user.isBanned ? 'unban-user' : 'ban-user';
-        const actionText = user.isBanned ? 'Unban' : 'Ban';
-
-        Alert.alert(
-            `Confirm ${actionText}`,
-            `Are you sure you want to ${actionText.toLowerCase()} ${user.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: actionText,
-                    style: user.isBanned ? 'default' : 'destructive',
-                    onPress: async () => {
-                        try {
-                            await api.post(`/admin/${action}`, { userId: user._id });
-                            fetchData();
-                        } catch (error) {
-                            Alert.alert('Error', `Failed to ${actionText.toLowerCase()} user`);
-                        }
-                    }
+        Alert.alert('Confirm Action', `Are you sure you want to ${user.isBanned ? 'unban' : 'ban'} ${user.name}?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Confirm', style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await api.post(`/admin/${action}`, { userId: user._id });
+                        fetchData();
+                    } catch (error) { Alert.alert('Error', 'Failed to update user status'); }
                 }
-            ]
-        );
+            }
+        ]);
     };
 
     const deletePost = async (postId) => {
-        Alert.alert(
-            'Delete Post',
-            'Delete this post permanently?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await api.post('/admin/delete-post', { postId });
-                            fetchData();
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to delete post');
-                        }
-                    }
-                }
-            ]
-        );
+        try {
+            await api.post('/admin/delete-post', { postId });
+            fetchData();
+        } catch (error) { Alert.alert('Error', 'Failed to delete post'); }
     };
 
-    const handleLogout = () => {
-        dispatch(logout());
-    };
+    const handleLogout = () => dispatch(logout());
 
     // --- Components ---
+    const UserAvatar = ({ uri, name, size = 50, style }) => {
+        const [imageError, setImageError] = useState(false);
 
-    const StatCard = ({ title, value, color, icon }) => (
-        <View style={[styles.statCard, { borderLeftColor: color }]}>
-            <Text style={styles.statValue}>{value}</Text>
-            <Text style={styles.statTitle}>{title}</Text>
-        </View>
-    );
+        if (uri && !imageError) {
+            return (
+                <Image
+                    source={{ uri }}
+                    style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#eee' }, style]}
+                    onError={() => setImageError(true)}
+                />
+            );
+        }
 
-    const renderChart = () => (
-        <View style={styles.chartContainer}>
-            <Text style={styles.sectionTitle}>User Growth 📈</Text>
-            <LineChart
-                data={{
-                    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                    datasets: [
-                        {
-                            data: [
-                                Math.random() * 100,
-                                Math.random() * 100,
-                                Math.random() * 100,
-                                Math.random() * 100,
-                                Math.random() * 100,
-                                Math.random() * 100
-                            ]
-                        }
-                    ]
-                }}
-                width={screenWidth - 40} // from react-native
-                height={220}
-                yAxisLabel=""
-                yAxisSuffix=""
-                yAxisInterval={1} // optional, defaults to 1
-                chartConfig={{
-                    backgroundColor: theme.colors.surface,
-                    backgroundGradientFrom: theme.colors.surface,
-                    backgroundGradientTo: theme.colors.surface,
-                    decimalPlaces: 0, // optional, defaults to 2dp
-                    color: (opacity = 1) => `rgba(0, 200, 83, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                    style: {
-                        borderRadius: 16
-                    },
-                    propsForDots: {
-                        r: "6",
-                        strokeWidth: "2",
-                        stroke: "#ffa726"
-                    }
-                }}
-                bezier
-                style={{
-                    marginVertical: 8,
-                    borderRadius: 16
-                }}
-            />
-        </View>
-    );
+        // Fallback Letter Avatar
+        const initial = name ? name.charAt(0).toUpperCase() : '?';
+        const colors = ['#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3', '#009688', '#FF9800', '#607D8B', '#795548'];
+        let hash = 0;
+        if (name) {
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+        }
+        const color = colors[Math.abs(hash) % colors.length];
 
-    const renderDriver = ({ item }) => (
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('UserDetails', { user: item })}>
-            <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
-            <View style={styles.infoCol}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.subtext}>{item.email}</Text>
-                <Text style={styles.idBadge}>{item.driverId || 'No ID'}</Text>
+        return (
+            <View style={[{
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: color,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#fff'
+            }, style]}>
+                <Text style={{ color: '#fff', fontSize: size * 0.45, fontWeight: 'bold' }}>{initial}</Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.statusBadge, { backgroundColor: item.isDriverVerified ? theme.colors.success + '20' : theme.colors.warning + '20', color: item.isDriverVerified ? theme.colors.success : theme.colors.warning }]}>
-                    {item.isDriverVerified ? 'Verified' : 'Pending'}
-                </Text>
-                {!item.isDriverVerified && (
-                    <TouchableOpacity style={styles.actionBtn} onPress={() => approveDriver(item._id, item.name)}>
-                        <Text style={styles.btnText}>Approve</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+        );
+    };
+    const SidebarItem = ({ icon, label, tab }) => (
+        <TouchableOpacity
+            style={[styles.sidebarItem, activeTab === tab && styles.activeSidebarItem]}
+            onPress={() => setActiveTab(tab)}
+        >
+            <Text style={[styles.sidebarText, activeTab === tab && styles.activeSidebarText]}>{icon}  {label}</Text>
         </TouchableOpacity>
     );
 
-    const renderUser = ({ item }) => (
-        <TouchableOpacity style={[styles.card, item.isBanned && styles.bannedCard]} onPress={() => navigation.navigate('UserDetails', { user: item })}>
-            <Image source={{ uri: item.avatar || 'https://i.pravatar.cc/300' }} style={styles.avatar} />
-            <View style={styles.infoCol}>
-                <Text style={styles.name}>{item.name} {item.role === 'admin' && '🛡️'}</Text>
-                <Text style={styles.subtext}>{item.email}</Text>
-                <Text style={[styles.roleBadge, { backgroundColor: item.role === 'driver' ? '#E3F2FD' : '#F3E5F5', color: item.role === 'driver' ? '#1976D2' : '#7B1FA2' }]}>
-                    {(item.role || 'unknown').toUpperCase()}
-                </Text>
+    const StatCard = ({ title, value, icon, color }) => (
+        <View style={[styles.statCard, { borderLeftColor: color }]}>
+            <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
+                <Text style={{ fontSize: 24 }}>{icon}</Text>
             </View>
-            {item.role !== 'admin' && (
-                <TouchableOpacity
-                    style={[styles.smallActionBtn, item.isBanned ? styles.unbanBtn : styles.banBtn]}
-                    onPress={() => toggleBanUser(item)}
-                >
-                    <Text style={styles.btnText}>{item.isBanned ? 'Unban' : 'Ban'}</Text>
+            <View>
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={styles.statTitle}>{title}</Text>
+            </View>
+        </View>
+    );
+
+    const renderDashboard = () => (
+        <ScrollView contentContainerStyle={styles.dashboardContent}>
+            <Text style={styles.pageTitle}>Dashboard Overview</Text>
+
+            <View style={styles.statsGrid}>
+                <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon="💰" color="#4CAF50" />
+                <StatCard title="Total Users" value={stats.users} icon="👥" color="#2196F3" />
+                <StatCard title="Total Rides" value={stats.rides} icon="🚗" color="#FF9800" />
+                <StatCard title="Total Flights" value={stats.flights} icon="✈️" color="#00BCD4" />
+            </View>
+
+            <View style={styles.chartSection}>
+                <Text style={styles.sectionTitle}>Revenue Trends (6 Months) 📈</Text>
+                <LineChart
+                    data={{
+                        labels: stats.revenueChart.labels,
+                        datasets: [{ data: stats.revenueChart.data }]
+                    }}
+                    width={isWeb ? screenWidth - 300 : screenWidth - 40}
+                    height={250}
+                    yAxisLabel="$"
+                    chartConfig={{
+                        backgroundColor: "#fff",
+                        backgroundGradientFrom: "#fff",
+                        backgroundGradientTo: "#fff",
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                        style: { borderRadius: 16 },
+                        propsForDots: { r: "5", strokeWidth: "2", stroke: "#2196F3" }
+                    }}
+                    bezier
+                    style={styles.chart}
+                />
+            </View>
+
+            {stats.topUser && (
+                <View style={styles.topUserCard}>
+                    <View style={styles.crownBadge}><Text style={{ fontSize: 20 }}>👑</Text></View>
+                    <Text style={styles.sectionTitle}>User of the Month</Text>
+                    <View style={styles.topUserRow}>
+                        <UserAvatar uri={stats.topUser.avatar} name={stats.topUser.name} size={80} style={styles.topUserAvatar} />
+                        <View>
+                            <Text style={styles.topUserName}>{stats.topUser.name}</Text>
+                            <Text style={styles.topUserDetail}>{stats.topUser.email}</Text>
+                            <View style={styles.badgeRow}>
+                                <View style={styles.statBadge}><Text style={styles.badgeText}>🚗 {stats.topUser.rideCount} Rides</Text></View>
+                                <View style={[styles.statBadge, { backgroundColor: '#E8F5E9' }]}><Text style={[styles.badgeText, { color: '#2E7D32' }]}>💸 ${stats.topUser.totalSpent.toLocaleString()}</Text></View>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            )}
+        </ScrollView>
+    );
+
+    const renderList = () => (
+        <FlatList
+            data={data}
+            keyExtractor={item => item._id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+                <TouchableOpacity style={styles.listItem} onPress={() => activeTab !== 'posts' && navigation.navigate('UserDetails', { user: item })}>
+                    <UserAvatar
+                        uri={item.avatar || item.author?.avatar}
+                        name={item.name || item.author?.name}
+                        size={50}
+                        style={{ marginRight: 15 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.listName}>{item.name || item.author?.name}</Text>
+                        <Text style={styles.listSub}>{item.email || new Date(item.createdAt).toLocaleDateString()}</Text>
+                        {activeTab === 'posts' && <Text numberOfLines={2} style={styles.postPreview}>{item.content}</Text>}
+                    </View>
+                    {activeTab === 'drivers' && !item.isDriverVerified && (
+                        <TouchableOpacity style={styles.approveBtn} onPress={() => approveDriver(item._id, item.name)}>
+                            <Text style={styles.btnText}>Approve</Text>
+                        </TouchableOpacity>
+                    )}
+                    {activeTab === 'posts' && (
+                        <TouchableOpacity style={styles.deleteBtn} onPress={() => deletePost(item._id)}>
+                            <Text style={styles.btnText}>Delete</Text>
+                        </TouchableOpacity>
+                    )}
                 </TouchableOpacity>
             )}
-        </TouchableOpacity>
-    );
-
-    const renderPost = ({ item }) => (
-        <View style={styles.postCard}>
-            <View style={styles.postHeader}>
-                <Image source={{ uri: item.author?.avatar || 'https://i.pravatar.cc/300' }} style={styles.postAvatar} />
-                <View>
-                    <Text style={styles.postUser}>{item.author?.name || 'Unknown User'}</Text>
-                    <Text style={styles.postDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
-                </View>
-            </View>
-            <Text style={styles.postContent}>{item.content}</Text>
-            {item.imageUrl && (
-                <Image source={{ uri: item.imageUrl }} style={styles.postImage} />
-            )}
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => deletePost(item._id)}>
-                <Text style={styles.deleteText}>Delete Post 🗑️</Text>
-            </TouchableOpacity>
-        </View>
+            ListEmptyComponent={<Text style={styles.emptyText}>No data found.</Text>}
+        />
     );
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.title}>Admin Panel</Text>
-                    <Text style={styles.subtitle}>Welcome back, Boss 👋</Text>
+            {/* Sidebar (Visible on Web/Tablet) */}
+            {isWeb && (
+                <View style={styles.sidebar}>
+                    <View style={styles.logoArea}>
+                        <Text style={styles.logoText}>Driven Admin</Text>
+                    </View>
+                    <SidebarItem icon="📊" label="Dashboard" tab="dashboard" />
+                    <SidebarItem icon="👥" label="Users" tab="users" />
+                    <SidebarItem icon="🚗" label="Drivers" tab="drivers" />
+                    <SidebarItem icon="📝" label="Posts" tab="posts" />
+
+                    <TouchableOpacity style={styles.sidebarLogout} onPress={handleLogout}>
+                        <Text style={styles.sidebarLogoutText}>🚪 Logout</Text>
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                    <Text style={styles.logoutText}>Logout</Text>
-                </TouchableOpacity>
-            </View>
+            )}
 
-            {/* Tabs */}
-            <View style={styles.tabContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {['stats', 'drivers', 'users', 'posts'].map(tab => (
-                        <TouchableOpacity
-                            key={tab}
-                            style={[styles.tab, activeTab === tab && styles.activeTab]}
-                            onPress={() => setActiveTab(tab)}
-                        >
-                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-
-            {activeTab === 'stats' && !loading ? (
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <View style={styles.statsRow}>
-                        <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} color="#4CAF50" />
-                        <StatCard title="Total Users" value={stats.users} color="#2196F3" />
+            {/* Main Content */}
+            <View style={styles.mainArea}>
+                {/* Mobile Header (Only visible on small screens) */}
+                {!isWeb && (
+                    <View style={styles.mobileHeader}>
+                        <Text style={styles.mobileTitle}>Driven Admin</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileNav}>
+                            {['dashboard', 'users', 'drivers', 'posts'].map(t => (
+                                <TouchableOpacity key={t} onPress={() => setActiveTab(t)} style={[styles.mobileTab, activeTab === t && styles.activeMobileTab]}>
+                                    <Text style={[styles.mobileTabText, activeTab === t && styles.activeMobileTabText]}>{t.toUpperCase()}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
                     </View>
-                    <View style={styles.statsRow}>
-                        <StatCard title="Rides" value={stats.rides} color="#FF9800" />
-                        <StatCard title="Flights" value={stats.flights} color="#00BCD4" />
-                        <StatCard title="Drivers" value={stats.drivers} color="#9C27B0" />
-                    </View>
+                )}
 
-                    {stats.topUser && (
-                        <View style={styles.topUserCard}>
-                            <Text style={styles.sectionTitle}>🏆 Top User of the Month</Text>
-                            <View style={styles.topUserRow}>
-                                <Image source={{ uri: stats.topUser.avatar || 'https://i.pravatar.cc/300' }} style={styles.topUserAvatar} />
-                                <View>
-                                    <Text style={styles.topUserName}>{stats.topUser.name}</Text>
-                                    <Text style={styles.topUserDetail}>{stats.topUser.email}</Text>
-                                    <Text style={styles.topUserStats}>
-                                        🚗 {stats.topUser.rideCount} Rides  |  💸 ${stats.topUser.totalSpent.toLocaleString()} Spent
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-                    )}
-                    {renderChart()}
-                </ScrollView>
-            ) : null}
-
-            {activeTab !== 'stats' && (
-                loading ? (
+                {loading ? (
                     <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 50 }} />
                 ) : (
-                    <FlatList
-                        data={data}
-                        keyExtractor={item => item._id}
-                        renderItem={
-                            activeTab === 'drivers' ? renderDriver :
-                                activeTab === 'users' ? renderUser : renderPost
-                        }
-                        contentContainerStyle={styles.list}
-                        ListEmptyComponent={<Text style={styles.empty}>No {activeTab} found.</Text>}
-                    />
-                )
-            )}
+                    activeTab === 'dashboard' ? renderDashboard() : renderList()
+                )}
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA', // Light grey-blue bg
-    },
-    header: {
-        backgroundColor: '#fff',
-        padding: 20,
-        paddingTop: 50,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee'
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: '#333'
-    },
-    subtitle: {
-        color: '#666',
-        fontSize: 14
-    },
-    logoutBtn: {
-        padding: 8,
-        backgroundColor: '#FFEBEE',
-        borderRadius: 8
-    },
-    logoutText: {
-        color: '#D32F2F',
-        fontWeight: 'bold',
-        fontSize: 12
-    },
-    tabContainer: {
-        backgroundColor: '#fff',
-        paddingVertical: 10,
-        paddingHorizontal: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        height: 60
-    },
-    tab: {
-        paddingVertical: 8,
-        paddingHorizontal: 20,
-        borderRadius: 20,
-        marginRight: 10,
-        backgroundColor: '#F5F5F5'
-    },
-    activeTab: {
-        backgroundColor: '#333'
-    },
-    tabText: {
-        fontWeight: '600',
-        color: '#666'
-    },
-    activeTabText: {
-        color: '#fff'
-    },
-    scrollContent: {
-        padding: 20
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 20
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 12,
-        marginHorizontal: 5,
-        borderLeftWidth: 4,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333'
-    },
-    statTitle: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 5
-    },
-    chartContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 15,
-        marginTop: 10,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#333'
-    },
-    list: {
-        padding: 20
-    },
-    card: {
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
-    },
-    bannedCard: {
-        backgroundColor: '#FFEBEE',
-        opacity: 0.7
-    },
-    avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        marginRight: 15,
-        backgroundColor: '#eee'
-    },
-    infoCol: {
-        flex: 1
-    },
-    name: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#333'
-    },
-    subtext: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 2
-    },
-    idBadge: {
-        fontSize: 10,
-        color: '#666',
-        marginTop: 2,
-        fontFamily: 'monospace'
-    },
-    statusBadge: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        borderRadius: 10,
-        overflow: 'hidden',
-        marginBottom: 5
-    },
-    roleBadge: {
-        alignSelf: 'flex-start',
-        fontSize: 10,
-        fontWeight: 'bold',
-        paddingVertical: 2,
-        paddingHorizontal: 6,
-        borderRadius: 4,
-        overflow: 'hidden',
-        marginTop: 4
-    },
-    actionBtn: {
-        backgroundColor: theme.colors.primary,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8
-    },
-    smallActionBtn: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 8
-    },
-    banBtn: {
-        backgroundColor: '#D32F2F'
-    },
-    unbanBtn: {
-        backgroundColor: '#388E3C'
-    },
-    btnText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 12
-    },
-    // Post Styles
-    postCard: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        marginBottom: 15,
-        padding: 15,
-        borderWidth: 1,
-        borderColor: '#eee'
-    },
-    postHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 10
-    },
-    postAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        marginRight: 10
-    },
-    postUser: {
-        fontWeight: 'bold',
-        fontSize: 14,
-        color: '#333'
-    },
-    postDate: {
-        fontSize: 12,
-        color: '#999'
-    },
-    postContent: {
-        fontSize: 14,
-        color: '#444',
-        marginBottom: 10,
-        lineHeight: 20
-    },
-    postImage: {
-        width: '100%',
-        height: 200,
-        borderRadius: 8,
-        marginBottom: 10
-    },
-    deleteBtn: {
-        alignSelf: 'flex-end',
-        paddingVertical: 5
-    },
-    deleteText: {
-        color: '#D32F2F',
-        fontWeight: 'bold',
-        fontSize: 12
-    },
-    empty: {
-        textAlign: 'center',
-        marginTop: 30,
-        color: '#888'
-    },
-    topUserCard: {
-        backgroundColor: '#fff', // Gold/Yellow tint could be nice 'FFF9C4' but keeping clean white
-        padding: 20,
-        borderRadius: 16,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#FFD700', // Gold border
-        shadowColor: "#FFD700",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-        elevation: 5
-    },
-    topUserRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 10
-    },
-    topUserAvatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        marginRight: 15,
-        borderWidth: 2,
-        borderColor: '#FFD700'
-    },
-    topUserName: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333'
-    },
-    topUserDetail: {
-        color: '#666',
-        fontSize: 12
-    },
-    topUserStats: {
-        marginTop: 5,
-        fontWeight: 'bold',
-        color: theme.colors.primary
-    }
+    container: { flex: 1, flexDirection: 'row', backgroundColor: '#F4F7FE' },
+    sidebar: { width: 250, backgroundColor: '#fff', paddingVertical: 30, paddingHorizontal: 20, borderRightWidth: 1, borderRightColor: '#eee' },
+    logoArea: { marginBottom: 40, paddingLeft: 10 },
+    logoText: { fontSize: 24, fontWeight: 'bold', color: theme.colors.primary },
+    sidebarItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 15, borderRadius: 12, marginBottom: 5 },
+    activeSidebarItem: { backgroundColor: theme.colors.primary },
+    sidebarText: { fontSize: 16, color: '#666', fontWeight: '600' },
+    activeSidebarText: { color: '#fff' },
+    sidebarLogout: { marginTop: 'auto', padding: 15 },
+    sidebarLogoutText: { color: 'red', fontWeight: 'bold' },
+
+    mainArea: { flex: 1, padding: isWeb ? 30 : 10 },
+    dashboardContent: { paddingBottom: 50 },
+    pageTitle: { fontSize: 28, fontWeight: 'bold', color: '#1B2559', marginBottom: 25 },
+
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 30 },
+    statCard: { width: isWeb ? '23%' : '48%', backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 15, borderLeftWidth: 5, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    iconBox: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    statValue: { fontSize: 24, fontWeight: 'bold', color: '#1B2559' },
+    statTitle: { fontSize: 14, color: '#A3AED0' },
+
+    chartSection: { backgroundColor: '#fff', padding: 20, borderRadius: 20, marginBottom: 30, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B2559', marginBottom: 20 },
+    chart: { borderRadius: 16, marginVertical: 8 },
+
+    topUserCard: { backgroundColor: '#fff', padding: 25, borderRadius: 20, position: 'relative', overflow: 'hidden', borderWidth: 1, borderColor: '#FFD700', shadowColor: "#FFD700", shadowOpacity: 0.2, shadowRadius: 10 },
+    crownBadge: { position: 'absolute', top: -10, right: -10, width: 60, height: 60, backgroundColor: '#FFF9C4', borderRadius: 30, justifyContent: 'center', alignItems: 'center', opacity: 0.5 },
+    topUserRow: { flexDirection: 'row', alignItems: 'center' },
+    topUserAvatar: { marginRight: 20, borderWidth: 3, borderColor: '#FFD700' },
+    topUserName: { fontSize: 22, fontWeight: 'bold', color: '#1B2559' },
+    topUserDetail: { fontSize: 14, color: '#A3AED0', marginBottom: 10 },
+    badgeRow: { flexDirection: 'row' },
+    statBadge: { backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginRight: 10 },
+    badgeText: { fontWeight: 'bold', color: '#1565C0', fontSize: 12 },
+
+    // List Styles
+    listContent: { paddingBottom: 50 },
+    listItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 16, marginBottom: 10, shadowOpacity: 0.05, shadowRadius: 5 },
+    // listAvatar removed as it's passed inline
+    listName: { fontSize: 16, fontWeight: 'bold', color: '#1B2559' },
+    listSub: { fontSize: 12, color: '#A3AED0' },
+    postPreview: { fontSize: 13, color: '#555', marginTop: 4 },
+    approveBtn: { backgroundColor: theme.colors.primary, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+    deleteBtn: { backgroundColor: '#EF5350', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 8 },
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+    emptyText: { textAlign: 'center', marginTop: 50, color: '#999' },
+
+    // Mobile Only
+    mobileHeader: { marginBottom: 20 },
+    mobileTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 15, color: '#1B2559' },
+    mobileNav: { flexDirection: 'row', marginBottom: 10 },
+    mobileTab: { marginRight: 10, paddingVertical: 8, paddingHorizontal: 20, backgroundColor: '#fff', borderRadius: 20 },
+    activeMobileTab: { backgroundColor: '#1B2559' },
+    mobileTabText: { fontWeight: '600', color: '#999' },
+    activeMobileTabText: { color: '#fff' }
 });
