@@ -285,7 +285,12 @@ export default function AdminDashboardScreen({ navigation }) {
                 {/* Mobile Header (Only visible on small screens) */}
                 {!isWeb && (
                     <View style={styles.mobileHeader}>
-                        <Text style={styles.mobileTitle}>Driven Admin</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                            <Text style={[styles.mobileTitle, { marginBottom: 0 }]}>Driven Admin</Text>
+                            <TouchableOpacity onPress={handleLogout} style={{ padding: 5 }}>
+                                <Text style={{ fontSize: 24 }}>🚪</Text>
+                            </TouchableOpacity>
+                        </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileNav}>
                             {['dashboard', 'users', 'drivers', 'posts'].map(t => (
                                 <TouchableOpacity key={t} onPress={() => setActiveTab(t)} style={[styles.mobileTab, activeTab === t && styles.activeMobileTab]}>

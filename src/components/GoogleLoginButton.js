@@ -15,13 +15,11 @@ export default function GoogleLoginButton() {
     const dispatch = useDispatch();
     const [request, response, promptAsync] = Google.useAuthRequest({
         // Replace with your actual IDs from Google Cloud Console
-        androidClientId: '265406180637-rrsltocqfo89i5mka9eei4mhrpb1sgmo.apps.googleusercontent.com',
+        androidClientId: '265406180637-o42kl8i9knniilsnd6p3n8tgi483ar8q.apps.googleusercontent.com',
         iosClientId: 'YOUR_IOS_CLIENT_ID',
         webClientId: '265406180637-er3lo5vshpi6ptsudg6kkne48jomsgjm.apps.googleusercontent.com',
-        redirectUri: AuthSession.makeRedirectUri({
-            useProxy: true,
-        }),
-        prompt: 'select_account', // Forces Google to show account picker
+        redirectUri: AuthSession.makeRedirectUri(), // Uses native scheme from app.json (driven://)
+        prompt: 'select_account',
     });
 
     useEffect(() => {

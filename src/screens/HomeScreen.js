@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     dragHandle: {
         width: 40,
         height: 5,
-        backgroundColor: '#ddd',
+        backgroundColor: 'rgba(0,0,0,0.1)', // Subtle instead of solid grey 'white line'
         borderRadius: 3
     },
     sheetTitle: {
